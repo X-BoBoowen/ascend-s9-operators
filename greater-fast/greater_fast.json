@@ -1,0 +1,28 @@
+[
+  {
+    "op": "GreaterFast",
+    "language": "cpp",
+    "input_desc": [
+      {
+        "name": "x1",
+        "param_type": "required",
+        "format": ["ND"],
+        "type": ["float16"]
+      },
+      {
+        "name": "x2",
+        "param_type": "required",
+        "format": ["ND"],
+        "type": ["float16"]
+      }
+    ],
+    "output_desc": [
+      {
+        "name": "y",
+        "param_type": "required",
+        "format": ["ND"],
+        "type": ["bool"]
+      }
+    ]
+  }
+]
