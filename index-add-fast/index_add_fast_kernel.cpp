@@ -27,9 +27,8 @@ public:
             reinterpret_cast<__gm__ int8_t*>(out),
             OUTPUT_ROWS * ROW_WIDTH);
 
-        const uint32_t indexBytes = rowsPerBlock_ * sizeof(int32_t);
-        const uint32_t alignedIndexBytes = (indexBytes + 31) / 32 * 32;
-        pipe_.InitBuffer(indexQueue_, BUFFER_NUM, alignedIndexBytes);
+        pipe_.InitBuffer(
+            indexQueue_, BUFFER_NUM, rowsPerBlock_ * sizeof(int32_t));
         pipe_.InitBuffer(
             sourceQueue_, BUFFER_NUM, rowsPerBlock_ * ROW_WIDTH * sizeof(int8_t));
     }
@@ -47,16 +46,7 @@ private:
             indexQueue_.AllocTensor<int32_t>();
         AscendC::LocalTensor<int8_t> sourceLocal =
             sourceQueue_.AllocTensor<int8_t>();
-        AscendC::DataCopyExtParams indexCopyParams{
-            1,
-            static_cast<uint32_t>(rowsPerBlock_ * sizeof(int32_t)),
-            0,
-            0,
-            0};
-        AscendC::DataCopyPadExtParams<int32_t> indexPadParams{
-            false, 0, 0, 0};
-        AscendC::DataCopyPad(
-            indexLocal, indexGm_, indexCopyParams, indexPadParams);
+        AscendC::DataCopy(indexLocal, indexGm_, rowsPerBlock_);
         AscendC::DataCopy(
             sourceLocal, sourceGm_, rowsPerBlock_ * ROW_WIDTH);
         indexQueue_.EnQue(indexLocal);

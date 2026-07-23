@@ -5,8 +5,8 @@ namespace optiling {
 static ge::graphStatus TilingFunc(gert::TilingContext* context)
 {
     IndexAddFastTilingData tiling;
-    tiling.set_rowsPerBlock(4);
-    context->SetBlockDim(30);
+    tiling.set_rowsPerBlock(8);
+    context->SetBlockDim(15);
     tiling.SaveToBuffer(
         context->GetRawTilingData()->GetData(),
         context->GetRawTilingData()->GetCapacity());
