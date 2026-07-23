@@ -24,6 +24,9 @@ cmake-build-*/
 PROF*/
 *.log
 .last_test.log
+checkpoints/
+*.tgz
+*.tar.gz
 
 # Local configuration and credentials
 .env
