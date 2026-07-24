@@ -4,9 +4,9 @@
 constexpr int32_t BUFFER_NUM = 1;
 
 
-class KernelGreaterFast {
+class KernelGreater {
 public:
-    __aicore__ inline KernelGreaterFast() {}
+    __aicore__ inline KernelGreater() {}
 
     __aicore__ inline void Init(
         GM_ADDR x1,
@@ -81,7 +81,7 @@ private:
 };
 
 
-extern "C" __global__ __aicore__ void greater_fast(
+extern "C" __global__ __aicore__ void greater(
     GM_ADDR x1,
     GM_ADDR x2,
     GM_ADDR y,
@@ -89,7 +89,7 @@ extern "C" __global__ __aicore__ void greater_fast(
     GM_ADDR tiling)
 {
     GET_TILING_DATA(tilingData, tiling);
-    KernelGreaterFast op;
+    KernelGreater op;
     op.Init(x1, x2, y, tilingData.size, AscendC::GetBlockIdx());
     op.Process();
 }

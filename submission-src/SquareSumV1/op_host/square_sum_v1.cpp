@@ -14,7 +14,7 @@ static ge::graphStatus TilingFunc(gert::TilingContext* context)
     const uint32_t paddedReduce = (reduceLen + 15U) / 16U * 16U;
     const uint32_t blockDim = outer < 32U ? outer : 32U;
 
-    SquareSumFastTilingData tiling;
+    SquareSumV1TilingData tiling;
     tiling.set_outer(outer);
     tiling.set_reduceLen(reduceLen);
     tiling.set_paddedReduce(paddedReduce);
@@ -44,20 +44,22 @@ static ge::graphStatus InferShape(gert::InferShapeContext* context)
 }
 
 namespace ops {
-class SquareSumFast : public OpDef {
+class SquareSumV1 : public OpDef {
 public:
-    explicit SquareSumFast(const char* name) : OpDef(name)
+    explicit SquareSumV1(const char* name) : OpDef(name)
     {
-        this->Input("x")
+        this->Input("input")
             .ParamType(REQUIRED)
             .DataType({ge::DT_FLOAT16})
             .Format({ge::FORMAT_ND})
             .UnknownShapeFormat({ge::FORMAT_ND});
-        this->Output("y")
+        this->Output("output")
             .ParamType(REQUIRED)
             .DataType({ge::DT_FLOAT16})
             .Format({ge::FORMAT_ND})
             .UnknownShapeFormat({ge::FORMAT_ND});
+        this->Attr("axis").AttrType(REQUIRED).ListInt();
+        this->Attr("keep_dims").AttrType(OPTIONAL).Bool(false);
 
         this->SetInferShape(ge::InferShape);
         this->AICore().SetTiling(optiling::TilingFunc);
@@ -65,5 +67,5 @@ public:
     }
 };
 
-OP_ADD(SquareSumFast);
+OP_ADD(SquareSumV1);
 }

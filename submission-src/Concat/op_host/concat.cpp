@@ -8,9 +8,9 @@ namespace optiling {
 static ge::graphStatus TilingFunc(gert::TilingContext* context)
 {
     const uint32_t inputCount = static_cast<uint32_t>(
-        *context->GetAttrs()->GetInt(0));
+        context->GetComputeNodeInputNum());
     const gert::StorageShape* firstShape =
-        context->GetRequiredInputShape(0);
+        context->GetDynamicInputShape(0, 0);
     const gert::Shape& shape = firstShape->GetStorageShape();
     const size_t rank = shape.GetDimNum();
 
@@ -29,9 +29,7 @@ static ge::graphStatus TilingFunc(gert::TilingContext* context)
     uint32_t maxWidth = 0;
     for (uint32_t i = 0; i < inputCount; ++i) {
         const gert::StorageShape* currentShape =
-            i == 0
-                ? context->GetRequiredInputShape(0)
-                : context->GetOptionalInputShape(i);
+            context->GetDynamicInputShape(0, i);
         const gert::Shape& current =
             currentShape->GetStorageShape();
         const uint32_t width =
@@ -57,7 +55,7 @@ static ge::graphStatus TilingFunc(gert::TilingContext* context)
         maxRowsPerBlock,
         std::min(capacityRows, MAX_COPY_ROWS));
 
-    ConcatFastTilingData tiling;
+    ConcatTilingData tiling;
     tiling.set_outer(outer);
     tiling.set_outInner(outInner);
     tiling.set_inputCount(inputCount);
@@ -82,23 +80,20 @@ static ge::graphStatus TilingFunc(gert::TilingContext* context)
 namespace ge {
 static ge::graphStatus InferShape(gert::InferShapeContext* context)
 {
-    const size_t inputCount = static_cast<size_t>(
-        *context->GetAttrs()->GetInt(0));
+    const size_t inputCount = context->GetComputeNodeInputNum();
     const gert::Shape* firstShape =
-        context->GetRequiredInputShape(0);
+        context->GetDynamicInputShape(0, 0);
     gert::Shape* outputShape = context->GetOutputShape(0);
     *outputShape = *firstShape;
 
     const size_t rank = firstShape->GetDimNum();
-    const int64_t rawDim = *context->GetAttrs()->GetInt(1);
+    const int64_t rawDim = *context->GetAttrs()->GetInt(0);
     const size_t dim = static_cast<size_t>(
         rawDim < 0 ? rawDim + static_cast<int64_t>(rank) : rawDim);
     int64_t total = 0;
     for (size_t i = 0; i < inputCount; ++i) {
         const gert::Shape* currentShape =
-            i == 0
-                ? context->GetRequiredInputShape(0)
-                : context->GetOptionalInputShape(i);
+            context->GetDynamicInputShape(0, i);
         total += currentShape->GetDim(dim);
     }
     outputShape->SetDim(dim, total);
@@ -107,44 +102,21 @@ static ge::graphStatus InferShape(gert::InferShapeContext* context)
 }
 
 namespace ops {
-class ConcatFast : public OpDef {
+class Concat : public OpDef {
 public:
-    explicit ConcatFast(const char* name) : OpDef(name)
+    explicit Concat(const char* name) : OpDef(name)
     {
-        this->Input("x0")
+        this->Input("inputs")
+            .ParamType(DYNAMIC)
+            .DataType({ge::DT_FLOAT16})
+            .Format({ge::FORMAT_ND})
+            .UnknownShapeFormat({ge::FORMAT_ND});
+        this->Output("output")
             .ParamType(REQUIRED)
             .DataType({ge::DT_FLOAT16})
             .Format({ge::FORMAT_ND})
             .UnknownShapeFormat({ge::FORMAT_ND});
-#define ADD_OPTIONAL_INPUT(input_name)             \
-        this->Input(input_name)                    \
-            .ParamType(OPTIONAL)                   \
-            .DataType({ge::DT_FLOAT16})            \
-            .Format({ge::FORMAT_ND})               \
-            .UnknownShapeFormat({ge::FORMAT_ND})
-        ADD_OPTIONAL_INPUT("x1");
-        ADD_OPTIONAL_INPUT("x2");
-        ADD_OPTIONAL_INPUT("x3");
-        ADD_OPTIONAL_INPUT("x4");
-        ADD_OPTIONAL_INPUT("x5");
-        ADD_OPTIONAL_INPUT("x6");
-        ADD_OPTIONAL_INPUT("x7");
-        ADD_OPTIONAL_INPUT("x8");
-        ADD_OPTIONAL_INPUT("x9");
-        ADD_OPTIONAL_INPUT("x10");
-        ADD_OPTIONAL_INPUT("x11");
-        ADD_OPTIONAL_INPUT("x12");
-        ADD_OPTIONAL_INPUT("x13");
-        ADD_OPTIONAL_INPUT("x14");
-        ADD_OPTIONAL_INPUT("x15");
-#undef ADD_OPTIONAL_INPUT
-        this->Output("y")
-            .ParamType(REQUIRED)
-            .DataType({ge::DT_FLOAT16})
-            .Format({ge::FORMAT_ND})
-            .UnknownShapeFormat({ge::FORMAT_ND});
-        this->Attr("inputCount").AttrType(REQUIRED).Int();
-        this->Attr("dim").AttrType(REQUIRED).Int();
+        this->Attr("dim").AttrType(OPTIONAL).Int(0);
 
         this->SetInferShape(ge::InferShape);
         this->AICore().SetTiling(optiling::TilingFunc);
@@ -152,5 +124,5 @@ public:
     }
 };
 
-OP_ADD(ConcatFast);
+OP_ADD(Concat);
 }

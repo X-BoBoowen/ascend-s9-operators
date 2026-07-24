@@ -1,28 +1,14 @@
 #include "kernel_operator.h"
+#include "kernel_operator_list_tensor_intf.h"
 
 constexpr uint32_t BUFFER_NUM = 2;
 
-class KernelConcatFast {
+class KernelConcat {
 public:
-    __aicore__ inline KernelConcatFast() {}
+    __aicore__ inline KernelConcat() {}
 
     __aicore__ inline void Init(
-        GM_ADDR x0,
-        GM_ADDR x1,
-        GM_ADDR x2,
-        GM_ADDR x3,
-        GM_ADDR x4,
-        GM_ADDR x5,
-        GM_ADDR x6,
-        GM_ADDR x7,
-        GM_ADDR x8,
-        GM_ADDR x9,
-        GM_ADDR x10,
-        GM_ADDR x11,
-        GM_ADDR x12,
-        GM_ADDR x13,
-        GM_ADDR x14,
-        GM_ADDR x15,
+        GM_ADDR x,
         GM_ADDR y,
         uint32_t outer,
         uint32_t outInner,
@@ -35,25 +21,15 @@ public:
         const uint32_t* offsets,
         uint32_t blockIdx)
     {
-        inputAddresses_[0] = x0;
-        inputAddresses_[1] = x1;
-        inputAddresses_[2] = x2;
-        inputAddresses_[3] = x3;
-        inputAddresses_[4] = x4;
-        inputAddresses_[5] = x5;
-        inputAddresses_[6] = x6;
-        inputAddresses_[7] = x7;
-        inputAddresses_[8] = x8;
-        inputAddresses_[9] = x9;
-        inputAddresses_[10] = x10;
-        inputAddresses_[11] = x11;
-        inputAddresses_[12] = x12;
-        inputAddresses_[13] = x13;
-        inputAddresses_[14] = x14;
-        inputAddresses_[15] = x15;
         outer_ = outer;
         outInner_ = outInner;
         inputCount_ = inputCount;
+        AscendC::ListTensorDesc inputList(
+            reinterpret_cast<__gm__ void*>(x));
+        for (uint32_t i = 0; i < inputCount_; ++i) {
+            inputAddresses_[i] = reinterpret_cast<GM_ADDR>(
+                inputList.GetDataPtr<half>(i));
+        }
         tileRows_ = tileRows;
         maxAlignedWidth_ = maxAlignedWidth;
         rows_ = baseRowsPerBlock + (blockIdx < extraBlocks ? 1U : 0U);
@@ -223,46 +199,16 @@ private:
     uint32_t offsets_[32];
 };
 
-extern "C" __global__ __aicore__ void concat_fast(
-    GM_ADDR x0,
-    GM_ADDR x1,
-    GM_ADDR x2,
-    GM_ADDR x3,
-    GM_ADDR x4,
-    GM_ADDR x5,
-    GM_ADDR x6,
-    GM_ADDR x7,
-    GM_ADDR x8,
-    GM_ADDR x9,
-    GM_ADDR x10,
-    GM_ADDR x11,
-    GM_ADDR x12,
-    GM_ADDR x13,
-    GM_ADDR x14,
-    GM_ADDR x15,
+extern "C" __global__ __aicore__ void concat(
+    GM_ADDR x,
     GM_ADDR y,
     GM_ADDR workspace,
     GM_ADDR tiling)
 {
     GET_TILING_DATA(tilingData, tiling);
-    KernelConcatFast op;
+    KernelConcat op;
     op.Init(
-        x0,
-        x1,
-        x2,
-        x3,
-        x4,
-        x5,
-        x6,
-        x7,
-        x8,
-        x9,
-        x10,
-        x11,
-        x12,
-        x13,
-        x14,
-        x15,
+        x,
         y,
         tilingData.outer,
         tilingData.outInner,

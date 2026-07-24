@@ -1,7 +1,7 @@
 #include "register/tilingdata_base.h"
 
 namespace optiling {
-BEGIN_TILING_DATA_DEF(TransposeFastTilingData)
+BEGIN_TILING_DATA_DEF(TransposeTilingData)
     TILING_DATA_FIELD_DEF(uint32_t, rows);
     TILING_DATA_FIELD_DEF(uint32_t, cols);
     TILING_DATA_FIELD_DEF(uint32_t, tileCols);
@@ -9,5 +9,5 @@ BEGIN_TILING_DATA_DEF(TransposeFastTilingData)
     TILING_DATA_FIELD_DEF(uint32_t, extraBlocks);
 END_TILING_DATA_DEF;
 
-REGISTER_TILING_DATA_CLASS(TransposeFast, TransposeFastTilingData)
+REGISTER_TILING_DATA_CLASS(Transpose, TransposeTilingData)
 }

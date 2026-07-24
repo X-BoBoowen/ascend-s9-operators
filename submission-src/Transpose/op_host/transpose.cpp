@@ -12,7 +12,7 @@ static ge::graphStatus TilingFunc(gert::TilingContext* context)
     const uint32_t totalTiles = (rows / 16) * tileCols;
     const uint32_t blockDim = totalTiles < 32 ? totalTiles : 32;
 
-    TransposeFastTilingData tiling;
+    TransposeTilingData tiling;
     tiling.set_rows(rows);
     tiling.set_cols(cols);
     tiling.set_tileCols(tileCols);
@@ -42,20 +42,21 @@ static ge::graphStatus InferShape(gert::InferShapeContext* context)
 }
 
 namespace ops {
-class TransposeFast : public OpDef {
+class Transpose : public OpDef {
 public:
-    explicit TransposeFast(const char* name) : OpDef(name)
+    explicit Transpose(const char* name) : OpDef(name)
     {
-        this->Input("x")
+        this->Input("inputs")
             .ParamType(REQUIRED)
             .DataType({ge::DT_FLOAT16})
             .Format({ge::FORMAT_ND})
             .UnknownShapeFormat({ge::FORMAT_ND});
-        this->Output("y")
+        this->Output("output")
             .ParamType(REQUIRED)
             .DataType({ge::DT_FLOAT16})
             .Format({ge::FORMAT_ND})
             .UnknownShapeFormat({ge::FORMAT_ND});
+        this->Attr("dims").AttrType(REQUIRED).ListInt();
 
         this->SetInferShape(ge::InferShape);
         this->AICore().SetTiling(optiling::TilingFunc);
@@ -63,5 +64,5 @@ public:
     }
 };
 
-OP_ADD(TransposeFast);
+OP_ADD(Transpose);
 }

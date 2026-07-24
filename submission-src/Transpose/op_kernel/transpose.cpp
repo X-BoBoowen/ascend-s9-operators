@@ -4,9 +4,9 @@ constexpr uint32_t BUFFER_NUM = 4;
 constexpr uint32_t TILE_SIZE = 16;
 constexpr uint32_t TILE_ELEMENTS = TILE_SIZE * TILE_SIZE;
 
-class KernelTransposeFast {
+class KernelTranspose {
 public:
-    __aicore__ inline KernelTransposeFast() {}
+    __aicore__ inline KernelTranspose() {}
 
     __aicore__ inline void Init(
         GM_ADDR x,
@@ -114,14 +114,14 @@ private:
     uint16_t outputDstStride_;
 };
 
-extern "C" __global__ __aicore__ void transpose_fast(
+extern "C" __global__ __aicore__ void transpose(
     GM_ADDR x,
     GM_ADDR y,
     GM_ADDR workspace,
     GM_ADDR tiling)
 {
     GET_TILING_DATA(tilingData, tiling);
-    KernelTransposeFast op;
+    KernelTranspose op;
     op.Init(
         x,
         y,

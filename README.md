@@ -6,19 +6,19 @@
 >
 > 目标环境：Ascend 910B、CANN 社区版 8.5.0、GCC 10.3、openEuler/ModelArts
 >
-> 当前结论：五题均有公开功能通过记录；Greater、IndexAdd、Transpose 已形成稳定自定义快路；Concat 与 SquareSumV1 同时保留稳定实现和后续优化分支。
+> 当前结论：五题均有公开功能通过记录；五套正式算子契约源码均已完成 CANN 8.5.0 构建并生成 `.run` 和 ZIP。仓库中的 `submission-src/` 已同步为实际生成最终 ZIP 的正式源码，开发目录仍保留 `*Fast` 实验实现。
 
 ## 1. 当前进度
 
-| 赛题 | 最近稳定公开验证 | 当前实现 | 提交源码 | 状态说明 |
+| 赛题 | 最近稳定公开验证 | 正式提交契约 | 构建/打包状态 | 状态说明 |
 |---|---|---|---|---|
-| `Greater` | `test pass` / `case1 verify result pass!` | 4 个 Vector Core 的 FP16 快路 | 已整理 | 稳定版本已进入提交源码 |
-| `IndexAdd` | `test pass` / `case1 verify result pass!` | 动态分核的 int8 原子累加快路 | 已整理 | 公共形状使用 15 核，已补充更一般的 index 行数分配 |
-| `Transpose` | `test pass` / `case1 verify result pass!` | 32 核二维分块转置 | 已整理 | 支持二维连续 FP16 的泛化分块 |
-| `Concat` | 早期 `ConcatFast` 稳定版本通过 | 16 核、双缓冲、末维拼接 | 已整理稳定版 | 最新 `ConcatD` 在线名称迁移尚未完全闭环，因此未宣称为最终版 |
-| `SquareSumV1` | `test pass` / `case1 verify result pass!` | FP16 平方并按末维归约的融合核 | 已整理 | 当前本地最快调用路径仍是官方组合实现；自定义融合 v4 已验证正确 |
+| `Greater` | `test pass` / `case1 verify result pass!` | `Greater` | `.run` 和 ZIP 已生成并审计 | 4 个 Vector Core 的 FP16 快路已迁移到正式名称 |
+| `IndexAdd` | `test pass` / `case1 verify result pass!` | `IndexAdd` | `.run` 和 ZIP 已生成并审计 | 公共形状使用 15 核，并支持更一般的 index 行数分配 |
+| `Transpose` | `test pass` / `case1 verify result pass!` | `Transpose` | `.run` 和 ZIP 已生成并审计 | 32 核二维连续 FP16 分块转置 |
+| `Concat` | 早期 `ConcatFast` 稳定版本通过 | `Concat` 动态输入列表 | `.run` 和 ZIP 已生成并审计 | 正式契约已构建；仍需在平台公开 harness 上完成最终闭环 |
+| `SquareSumV1` | `test pass` / `case1 verify result pass!` | `SquareSumV1` | `.run` 和 ZIP 已生成并审计 | 融合 v4 已验证正确；当前最快 runner 观察仍来自官方组合路径 |
 
-“公开验证通过”只表示赛事提供的公开 `case1` 在指定云环境中通过，不代表隐藏用例、平台最终成绩或排名。
+“公开验证通过”只表示赛事提供的公开 `case1` 在指定云环境中通过，不代表隐藏用例、平台最终成绩或排名。“已生成并审计”表示正式源码已产出非空 `.run`，并完成 ZIP 路径白名单、正式 `OP_ADD`、内部实验名称残留和源码同步检查；它也不等价于平台上传验收通过。
 
 ## 2. 已观察到的性能
 
@@ -38,7 +38,7 @@
 
 ### 3.1 Greater
 
-`GreaterFast` 面向连续、同形状的 FP16 输入：
+正式提交算子 `Greater` 源自开发阶段的 `GreaterFast`，面向连续、同形状的 FP16 输入：
 
 - Host tiling 根据元素数量选择 1–4 个 Vector Core；
 - 每核处理连续片段；
@@ -49,7 +49,7 @@
 
 ### 3.2 IndexAdd
 
-`IndexAddFast` 面向 int8 输入、int32 index 和按第 0 维累加：
+正式提交算子 `IndexAdd` 源自开发阶段的 `IndexAddFast`，面向 int8 输入、int32 index 和按第 0 维累加：
 
 - 每核基础处理 8 条 source 行；
 - Host 根据 index 数量动态选择核数，最多 32 核；
@@ -62,7 +62,7 @@
 
 ### 3.3 Transpose
 
-`TransposeFast` 当前处理二维连续 FP16 转置：
+正式提交算子 `Transpose` 源自开发阶段的 `TransposeFast`，当前处理二维连续 FP16 转置：
 
 - 将矩阵划分为固定 tile；
 - 最多使用 32 个 Vector Core；
@@ -73,19 +73,21 @@
 
 ### 3.4 Concat
 
-仓库中的稳定 `ConcatFast` 提交源码面向末维拼接：
+正式提交算子 `Concat` 使用动态输入列表契约，kernel 算法源自稳定 `ConcatFast`，面向末维拼接：
 
 - 支持多个 FP16 输入；
+- Host 通过动态输入列表读取输入数量和各输入形状；
+- kernel 通过 `ListTensorDesc` 获取每个输入的 GM 地址；
 - Host 计算 outer、各输入末维宽度和输出行跨度；
 - 最多使用 16 核；
 - kernel 使用双缓冲，在输入和输出 GM 之间按行搬运；
 - 输入宽度与偏移由 tiling 数据统一传入。
 
-后续尝试将在线算子名称迁移为 `ConcatD`，但最近一次完整公开 harness 尚未闭环。因此仓库明确区分“稳定提交源码”和“最新实验命名”，避免把失败实验写成已完成成果。
+早期 `ConcatFast` 和 `ConcatD` 仅作为开发过程记录；`submission-src/Concat` 已切换到赛事正式 `Concat` 契约并成功生成提交包。正式契约仍需在平台公开 harness 上完成最终功能和性能复测，因此不发布未经确认的最终耗时。
 
 ### 3.5 SquareSumV1
 
-自定义 `SquareSumFast` 融合核执行：
+正式提交算子 `SquareSumV1` 源自自定义 `SquareSumFast` 融合核，执行：
 
 1. FP16 输入搬入 UB；
 2. 转换为 FP32；
@@ -105,13 +107,13 @@ Host 按 outer 行数最多分配 32 核，并对 reduce 长度进行对齐。�
 |   |-- Transpose/
 |   |-- Concat/
 |   `-- SquareSumV1/
-|-- submission-src/         # 当前五题提交源码，使用平台要求的正式文件名
+|-- submission-src/         # 实际生成最终 ZIP 的五题正式契约源码
 |   |-- Greater/
 |   |-- IndexAdd/
 |   |-- Transpose/
 |   |-- Concat/
 |   `-- SquareSumV1/
-|-- operator-descriptors/   # msopgen 使用的内部算子描述
+|-- operator-descriptors/   # 开发阶段 *Fast 工程使用的 msopgen 描述
 |-- greater-fast/           # GreaterFast 早期独立开发快照
 |-- index-add-fast/         # IndexAddFast 早期独立开发快照
 |-- extra_correctness.py    # 五题附加边界正确性测试
@@ -119,7 +121,7 @@ Host 按 outer 行数最多分配 32 核，并对 reduce 长度进行对齐。�
 `-- sheet-inspect/          # 赛题表格的只读检查工具
 ```
 
-`submission-src/` 是当前最重要的源码入口。每题包含：
+`submission-src/` 是当前最重要的源码入口。它已从五个最终 ZIP 反向核对并同步，只保留可开源的 Host/Kernel 源码，不提交 `.run`。每题包含：
 
 ```text
 <Operator>/
@@ -134,15 +136,15 @@ Host 按 outer 行数最多分配 32 核，并对 reduce 长度进行对齐。�
 
 正式文件名映射如下：
 
-| 赛题 | Host/Kernel 文件 | Tiling 文件 | 稳定内部算子类型 |
-|---|---|---|---|
-| Greater | `greater.cpp` | `greater_tiling.h` | `GreaterFast` |
-| IndexAdd | `index_add.cpp` | `index_add_tiling.h` | `IndexAddFast` |
-| SquareSumV1 | `square_sum_v1.cpp` | `square_sum_v1_tiling.h` | `SquareSumFast` |
-| Concat | `concat.cpp` | `concat_tiling.h` | `ConcatFast` |
-| Transpose | `transpose.cpp` | `transpose_tiling.h` | `TransposeFast` |
+| 赛题 | Host/Kernel 文件 | Tiling 文件 | 正式算子/Kernel | 开发阶段对应名称 |
+|---|---|---|---|---|
+| Greater | `greater.cpp` | `greater_tiling.h` | `Greater` / `greater` | `GreaterFast` / `greater_fast` |
+| IndexAdd | `index_add.cpp` | `index_add_tiling.h` | `IndexAdd` / `index_add` | `IndexAddFast` / `index_add_fast` |
+| SquareSumV1 | `square_sum_v1.cpp` | `square_sum_v1_tiling.h` | `SquareSumV1` / `square_sum_v1` | `SquareSumFast` / `square_sum_fast` |
+| Concat | `concat.cpp` | `concat_tiling.h` | `Concat` / `concat` | `ConcatFast` / `concat_fast` |
+| Transpose | `transpose.cpp` | `transpose_tiling.h` | `Transpose` / `transpose` | `TransposeFast` / `transpose_fast` |
 
-平台 `Zip_Check` 会检查正式文件名。仅在 ZIP 内随意改名会造成源码、CMake 和 `.run` 不一致，因此提交包必须从一致的源码状态重新编译。
+平台 `Zip_Check` 会检查正式文件名。正式提交还要求 `OP_ADD`、tiling 注册类、kernel 入口、CMake 生成目标以及 `.run` 中的算子元数据保持一致；仅在 ZIP 内随意改名会导致提交契约不一致。
 
 ## 5. 环境要求
 
@@ -168,7 +170,7 @@ export CXX=/path/to/gcc-10.3/bin/g++
 
 ## 6. 构建 Ascend C 算子
 
-算子描述位于 `operator-descriptors/`。以 Greater 为例：
+`operator-descriptors/` 保存的是开发阶段内部 `*Fast` 工程的算子描述。以 GreaterFast 为例：
 
 ```bash
 msopgen gen \
@@ -179,11 +181,11 @@ msopgen gen \
   -lan cpp
 ```
 
-随后将对应 `submission-src/Greater/op_host` 和 `op_kernel` 源码同步到生成工程。需要注意：
+这类描述适合复现开发 harness，但不能直接与正式 `submission-src/` 混用。正式提交工程必须使用与赛事签名一致的算子描述生成，再同步对应 `submission-src/<Operator>/op_host` 和 `op_kernel`。需要注意：
 
-- `submission-src` 使用平台正式文件名；
-- descriptor 当前保留经过验证的内部 `*Fast` 算子类型；
-- 生成工程的源文件映射、CMake 路径和 include 名称必须保持一致；
+- `submission-src` 同时使用平台正式文件名、正式 `OP_ADD` 和正式 kernel 入口；
+- `operator-descriptors` 当前保留经过验证的内部 `*Fast` 开发类型，不是最终平台描述；
+- 生成工程的输入、输出、属性、动态输入、源文件映射和 include 名称必须与正式契约一致；
 - 不应仅改文件名而不重新构建 `.run`。
 
 在生成工程中执行：
@@ -199,7 +201,7 @@ bash build.sh
 build_out/custom_opp_euleros_aarch64.run
 ```
 
-目前仓库已经公开核心源码和 descriptor，但尚未把五题工程生成、文件映射、编译与打包整合成完全可移植的一键脚本。
+五题正式工程已在 CANN 8.5.0 云环境中成功构建过；仓库公开实际打包使用的核心源码和开发 descriptor，但尚未公开由赛事正式描述生成的完整工程，也尚未把工程生成、编译、验证和打包整合成跨机器的一键脚本。
 
 ## 7. 运行公开用例
 
@@ -269,14 +271,32 @@ Greater_zip/
 `-- custom_opp_euleros_aarch64.run
 ```
 
-本仓库不提交 `.run`、wheel、profile 数据库和构建缓存。二进制提交包应由参赛者在 CANN 8.5.0 的目标环境中从对应提交源码重新构建。
+截至 2026-07-24，五题均已按这一结构生成最终候选 ZIP。离线审计包含：
+
+- ZIP 可完整读取，且每题只有顶层 `<Operator>_zip/`、`op_host/`、`op_kernel/` 和一个 `custom_opp_euleros_aarch64.run`；
+- Host/Kernel 文件名符合 `Zip_Check` 要求；
+- Host 源码包含正式 `OP_ADD(<Operator>)`；
+- 正式源码中不残留 `Fast`、`ConcatD` 或 `concat_d` 等内部实验名称；
+- 每个包内只有一个非空 `.run`，并记录候选包的 SHA-256 以便后续上传核对。
+
+本轮候选包校验值：
+
+| 文件 | SHA-256 |
+|---|---|
+| `Concat.zip` | `6bb09b39c2929b0ab2fdd750031f42d587af5bf221da8a8aa33d159f32327ce0` |
+| `Greater.zip` | `9f0b33ac82d3d4d4aad54d9836fedf83bf80e5cb5a041906b27b1f0047ffa4de` |
+| `IndexAdd.zip` | `b45c2bea00fb99182f6e26213954651e466ace552a6b93df81286b4fc3e137e9` |
+| `SquareSumV1.zip` | `8a5e869946ed33ea970e15d3df5ea746936dd3b69a28b1cd3830b3f7d6405b7f` |
+| `Transpose.zip` | `0c27c7d4be542435ae2a4f38b4fa51c6219aec48816e25948788b5ee4ccade28` |
+
+最终候选包仍应逐题上传平台，以平台 `Zip_Check`、精度验证和性能结果作为最终结论。本仓库不提交 `.run`、ZIP、wheel、profile 数据库和构建缓存；二进制提交包必须在 CANN 8.5.0 目标环境中由对应源码重新构建。
 
 ## 10. 已知问题
 
-1. 最新“内部算子类型直接改成官方名称”的完整工程仍有链接问题，已观察到 `cannot find -lascend_kernels`。因此当前稳定方案保留经过验证的内部 `*Fast` 类型，并在提交层使用平台要求的正式文件名。
-2. Concat 的 `ConcatD` 在线名称迁移尚未完成最终公开 harness 验证；仓库保留早期稳定 `ConcatFast` 提交源码。
-3. SquareSumV1 当前最快 runner 路径是官方组合实现，而 `submission-src` 中是已验证正确的自定义融合版本。
-4. 公开用例通过不保证隐藏用例泛化或榜单成绩。
+1. Concat 正式动态输入契约已经构建和打包，但尚未完成平台公开 harness 的最终功能与性能闭环。
+2. SquareSumV1 当前最快 runner 观察来自官方组合实现，而 `submission-src` 中是已验证正确的自定义融合版本，二者的耗时不能直接等同。
+3. 当前环境的 ModelArts SSH 接入已由远端在握手阶段关闭，因此本轮无法确认云端是否还有晚于最终 ZIP 的未同步实验文件。
+4. 公开用例通过以及离线包审计均不保证隐藏用例泛化、平台上传验收或榜单成绩。
 5. 五题尚未形成跨机器的一键生成、编译、安装、测试和打包流水线。
 6. 仓库当前未声明开源许可证；正式对外复用前需要补充合适的 LICENSE。
 
@@ -301,8 +321,9 @@ git ls-files | grep -Ei '\.(pem|key|run|so|whl)$'
 
 ## 12. 后续计划
 
-- 修复正式内部算子名称工程的 `ascend_kernels` 链接与生成依赖；
-- 完成 Concat 在线契约的公开用例闭环；
+- 恢复 ModelArts 连接后，对比云端最近修改时间并确认没有遗漏更新；
+- 逐题上传最终候选 ZIP，记录 `Zip_Check`、精度和性能结果；
+- 完成 Concat 正式动态输入契约的公开用例闭环；
 - 对 SquareSumV1 融合核继续做性能 A/B；
 - 扩展五题隐藏形状、dtype、广播和非连续布局覆盖；
 - 增加统一的一键构建、测试、profile 和提交包脚本；

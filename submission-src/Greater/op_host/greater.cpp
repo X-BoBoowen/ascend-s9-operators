@@ -5,7 +5,7 @@
 namespace optiling {
 static ge::graphStatus TilingFunc(gert::TilingContext* context)
 {
-    GreaterFastTilingData tiling;
+    GreaterTilingData tiling;
     const gert::StorageShape* inputShape = context->GetInputShape(0);
     uint64_t size = inputShape->GetStorageShape().GetShapeSize();
     uint32_t blockDim = 1;
@@ -38,21 +38,21 @@ static ge::graphStatus InferShape(gert::InferShapeContext* context)
 
 
 namespace ops {
-class GreaterFast : public OpDef {
+class Greater : public OpDef {
 public:
-    explicit GreaterFast(const char* name) : OpDef(name)
+    explicit Greater(const char* name) : OpDef(name)
     {
-        this->Input("x1")
+        this->Input("self")
             .ParamType(REQUIRED)
             .DataType({ge::DT_FLOAT16})
             .Format({ge::FORMAT_ND})
             .UnknownShapeFormat({ge::FORMAT_ND});
-        this->Input("x2")
+        this->Input("other")
             .ParamType(REQUIRED)
             .DataType({ge::DT_FLOAT16})
             .Format({ge::FORMAT_ND})
             .UnknownShapeFormat({ge::FORMAT_ND});
-        this->Output("y")
+        this->Output("output")
             .ParamType(REQUIRED)
             .DataType({ge::DT_BOOL})
             .Format({ge::FORMAT_ND})
@@ -64,5 +64,5 @@ public:
     }
 };
 
-OP_ADD(GreaterFast);
+OP_ADD(Greater);
 }

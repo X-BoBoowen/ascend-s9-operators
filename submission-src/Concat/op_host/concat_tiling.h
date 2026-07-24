@@ -1,10 +1,10 @@
-#ifndef CONCAT_FAST_TILING_H
-#define CONCAT_FAST_TILING_H
+#ifndef CONCAT_TILING_H
+#define CONCAT_TILING_H
 
 #include "register/tilingdata_base.h"
 
 namespace optiling {
-BEGIN_TILING_DATA_DEF(ConcatFastTilingData)
+BEGIN_TILING_DATA_DEF(ConcatTilingData)
     TILING_DATA_FIELD_DEF(uint32_t, outer);
     TILING_DATA_FIELD_DEF(uint32_t, outInner);
     TILING_DATA_FIELD_DEF(uint32_t, inputCount);
@@ -16,7 +16,7 @@ BEGIN_TILING_DATA_DEF(ConcatFastTilingData)
     TILING_DATA_FIELD_DEF_ARR(uint32_t, 32, offsets);
 END_TILING_DATA_DEF;
 
-REGISTER_TILING_DATA_CLASS(ConcatFast, ConcatFastTilingData)
+REGISTER_TILING_DATA_CLASS(Concat, ConcatTilingData)
 }
 
 #endif

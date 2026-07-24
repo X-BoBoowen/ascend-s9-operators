@@ -21,7 +21,7 @@ static ge::graphStatus TilingFunc(gert::TilingContext* context)
         (indexCount + ROWS_PER_BLOCK - 1U) / ROWS_PER_BLOCK,
         MAX_BLOCK_DIM);
 
-    IndexAddFastTilingData tiling;
+    IndexAddTilingData tiling;
     tiling.set_outputRows(outputRows);
     tiling.set_indexCount(indexCount);
     tiling.set_rowWidth(rowWidth);
@@ -50,9 +50,9 @@ static ge::graphStatus InferShape(gert::InferShapeContext* context)
 }
 
 namespace ops {
-class IndexAddFast : public OpDef {
+class IndexAdd : public OpDef {
 public:
-    explicit IndexAddFast(const char* name) : OpDef(name)
+    explicit IndexAdd(const char* name) : OpDef(name)
     {
         this->Input("self")
             .ParamType(REQUIRED)
@@ -69,11 +69,12 @@ public:
             .DataType({ge::DT_INT8})
             .Format({ge::FORMAT_ND})
             .UnknownShapeFormat({ge::FORMAT_ND});
-        this->Output("out")
+        this->Output("output")
             .ParamType(REQUIRED)
             .DataType({ge::DT_INT8})
             .Format({ge::FORMAT_ND})
             .UnknownShapeFormat({ge::FORMAT_ND});
+        this->Attr("dim").AttrType(OPTIONAL).Int(0);
 
         this->SetInferShape(ge::InferShape);
         this->AICore().SetTiling(optiling::TilingFunc);
@@ -81,5 +82,5 @@ public:
     }
 };
 
-OP_ADD(IndexAddFast);
+OP_ADD(IndexAdd);
 }

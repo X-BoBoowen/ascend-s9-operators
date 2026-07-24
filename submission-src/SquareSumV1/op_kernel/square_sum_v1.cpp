@@ -2,9 +2,9 @@
 
 constexpr uint32_t BUFFER_NUM = 1;
 
-class KernelSquareSumFast {
+class KernelSquareSumV1 {
 public:
-    __aicore__ inline KernelSquareSumFast() {}
+    __aicore__ inline KernelSquareSumV1() {}
 
     __aicore__ inline void Init(
         GM_ADDR x,
@@ -152,14 +152,14 @@ private:
     uint32_t firstRow_;
 };
 
-extern "C" __global__ __aicore__ void square_sum_fast(
+extern "C" __global__ __aicore__ void square_sum_v1(
     GM_ADDR x,
     GM_ADDR y,
     GM_ADDR workspace,
     GM_ADDR tiling)
 {
     GET_TILING_DATA(tilingData, tiling);
-    KernelSquareSumFast op;
+    KernelSquareSumV1 op;
     op.Init(
         x,
         y,

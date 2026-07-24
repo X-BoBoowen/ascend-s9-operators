@@ -3,9 +3,9 @@
 constexpr uint32_t BUFFER_NUM = 1;
 
 template <bool ALIGNED_EIGHT>
-class KernelIndexAddFast {
+class KernelIndexAdd {
 public:
-    __aicore__ inline KernelIndexAddFast() {}
+    __aicore__ inline KernelIndexAdd() {}
 
     __aicore__ inline void Init(
         GM_ADDR index,
@@ -129,7 +129,7 @@ private:
     uint32_t rows_;
 };
 
-extern "C" __global__ __aicore__ void index_add_fast(
+extern "C" __global__ __aicore__ void index_add(
     GM_ADDR self,
     GM_ADDR index,
     GM_ADDR source,
@@ -139,7 +139,7 @@ extern "C" __global__ __aicore__ void index_add_fast(
 {
     GET_TILING_DATA(tilingData, tiling);
     if (TILING_KEY_IS(1)) {
-        KernelIndexAddFast<true> op;
+        KernelIndexAdd<true> op;
         op.Init(
             index,
             source,
@@ -152,7 +152,7 @@ extern "C" __global__ __aicore__ void index_add_fast(
             AscendC::GetBlockIdx());
         op.Process();
     } else if (TILING_KEY_IS(0)) {
-        KernelIndexAddFast<false> op;
+        KernelIndexAdd<false> op;
         op.Init(
             index,
             source,
