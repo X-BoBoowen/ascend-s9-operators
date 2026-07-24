@@ -39,3 +39,12 @@ checkpoints/
 .vscode/
 .DS_Store
 Thumbs.db
+
+# Local inspection and synchronization workspaces
+/current-submission-extracted-*/
+/final-official-contract-*/
+/final-zips-official-contract-*/
+/remote-current-*/
+/submission-docx-xml/
+/xlsx-inspect/
+/transpose-fast/

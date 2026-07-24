@@ -1,151 +1,313 @@
-# 昇腾算子挑战赛 S9
+# 昇腾 AI 创新大赛 · 算子挑战赛 S9
 
-本仓库用于昇腾 AI 创新大赛算子挑战赛 S9 的 910B 赛题开发，记录五道算子的 CANN 8.5 兼容适配、正确性验证、性能分析和 Ascend C 优化过程。
+本仓库记录昇腾 AI 创新大赛算子挑战赛 S9 五道 910B 赛题的适配、验证、性能分析与 Ascend C 优化工作。目标是在满足精度、泛化和提交契约的前提下，持续降低公开及隐藏用例的算子耗时。
 
-> 当前状态（2026-07-23）：五题公开基线全部通过，11 个通用边界用例全部通过；`Greater` 和 `IndexAdd` 已完成第一轮稳定优化，主线正在优化 `Transpose`。
+> 状态日期：2026-07-24
+>
+> 目标环境：Ascend 910B、CANN 社区版 8.5.0、GCC 10.3、openEuler/ModelArts
+>
+> 当前结论：五题均有公开功能通过记录；Greater、IndexAdd、Transpose 已形成稳定自定义快路；Concat 与 SquareSumV1 同时保留稳定实现和后续优化分支。
 
-## 当前进度
+## 1. 当前进度
 
-| 算子 | 公开用例 | 当前阶段 | 已验证结论 |
+| 赛题 | 最近稳定公开验证 | 当前实现 | 提交源码 | 状态说明 |
+|---|---|---|---|---|
+| `Greater` | `test pass` / `case1 verify result pass!` | 4 个 Vector Core 的 FP16 快路 | 已整理 | 稳定版本已进入提交源码 |
+| `IndexAdd` | `test pass` / `case1 verify result pass!` | 动态分核的 int8 原子累加快路 | 已整理 | 公共形状使用 15 核，已补充更一般的 index 行数分配 |
+| `Transpose` | `test pass` / `case1 verify result pass!` | 32 核二维分块转置 | 已整理 | 支持二维连续 FP16 的泛化分块 |
+| `Concat` | 早期 `ConcatFast` 稳定版本通过 | 16 核、双缓冲、末维拼接 | 已整理稳定版 | 最新 `ConcatD` 在线名称迁移尚未完全闭环，因此未宣称为最终版 |
+| `SquareSumV1` | `test pass` / `case1 verify result pass!` | FP16 平方并按末维归约的融合核 | 已整理 | 当前本地最快调用路径仍是官方组合实现；自定义融合 v4 已验证正确 |
+
+“公开验证通过”只表示赛事提供的公开 `case1` 在指定云环境中通过，不代表隐藏用例、平台最终成绩或排名。
+
+## 2. 已观察到的性能
+
+以下数据用于版本选择，均来自同一类 Ascend 910B 云实例。不同实例、驱动状态、profiler 采样和 warm-up 会产生波动。
+
+| 算子 | 代表性稳定观察 | 备注 |
+|---|---:|---|
+| `GreaterFast` | 公开 runner 约 `2.40 us`；稳态 kernel 常见约 `2.0–2.3 us` | 4 核版本优于此前 8 核候选 |
+| `IndexAddFast` | 公开 runner 约 `3.08 us` | 公开形状使用 15 核；显著快于 AiCPU 路径 |
+| `TransposeFast` | 稳态 kernel 常见约 `4.3–4.9 us` | 二维 `128×256 -> 256×128`，32 核 |
+| `SquareSumV1` | 官方组合路径约 `2.58 us` | 该数字不是自定义融合核的最终平台成绩 |
+| `Concat` | 尚不发布最终数字 | 在线契约名称迁移和最终复测仍在进行 |
+
+赛事 runner 会在目标算子之间插入较大的 `Mul` 工作负载，因此 runner 输出、kernel profiler 时间和平台排行榜耗时不能直接混用。
+
+## 3. 实现概览
+
+### 3.1 Greater
+
+`GreaterFast` 面向连续、同形状的 FP16 输入：
+
+- Host tiling 根据元素数量选择 1–4 个 Vector Core；
+- 每核处理连续片段；
+- kernel 通过向量计算生成严格规范的 bool 输出；
+- 不满足快路条件的输入由 PyTorch 扩展回退到 ACLNN。
+
+已覆盖 NaN、Inf、正负零、相等值、FP16 子正规数、FP32、int32、广播及非连续输入等专项测试。
+
+### 3.2 IndexAdd
+
+`IndexAddFast` 面向 int8 输入、int32 index 和按第 0 维累加：
+
+- 每核基础处理 8 条 source 行；
+- Host 根据 index 数量动态选择核数，最多 32 核；
+- public case 的 120 条 index 使用 15 核；
+- kernel 使用 int8 原子加，保持重复 index 的并发语义；
+- tiling key 区分整 8 行和尾块路径；
+- wrapper 先复制原 input，再对命中行进行累加。
+
+专项验证包括最坏重复 index、跨核冲突、正负溢出模 256、未命中行保持、随机全范围 int8 以及重复运行竞态检查。
+
+### 3.3 Transpose
+
+`TransposeFast` 当前处理二维连续 FP16 转置：
+
+- 将矩阵划分为固定 tile；
+- 最多使用 32 个 Vector Core；
+- Host 均匀分配 tile，并单独处理余数；
+- kernel 使用 Ascend C `Transpose` 指令；
+- 使用 4 级队列缓冲；
+- 非二维、非 FP16、非连续或不符合快路契约的输入回退到 `aclnnPermute`。
+
+### 3.4 Concat
+
+仓库中的稳定 `ConcatFast` 提交源码面向末维拼接：
+
+- 支持多个 FP16 输入；
+- Host 计算 outer、各输入末维宽度和输出行跨度；
+- 最多使用 16 核；
+- kernel 使用双缓冲，在输入和输出 GM 之间按行搬运；
+- 输入宽度与偏移由 tiling 数据统一传入。
+
+后续尝试将在线算子名称迁移为 `ConcatD`，但最近一次完整公开 harness 尚未闭环。因此仓库明确区分“稳定提交源码”和“最新实验命名”，避免把失败实验写成已完成成果。
+
+### 3.5 SquareSumV1
+
+自定义 `SquareSumFast` 融合核执行：
+
+1. FP16 输入搬入 UB；
+2. 转换为 FP32；
+3. 逐元素平方；
+4. 对最后一维执行 `WholeReduceSum`；
+5. 转回 FP16 并写回。
+
+Host 按 outer 行数最多分配 32 核，并对 reduce 长度进行对齐。该融合版本已通过正确性验证，但当前选中的最快 runner 路径仍是官方 `Mul + ReduceSum` 组合，因此二者不能混为同一个性能结论。
+
+## 4. 仓库结构
+
+```text
+.
+|-- case_910b/
+|   |-- Greater/            # 官方公开用例、CppExtension 和运行脚本
+|   |-- IndexAdd/
+|   |-- Transpose/
+|   |-- Concat/
+|   `-- SquareSumV1/
+|-- submission-src/         # 当前五题提交源码，使用平台要求的正式文件名
+|   |-- Greater/
+|   |-- IndexAdd/
+|   |-- Transpose/
+|   |-- Concat/
+|   `-- SquareSumV1/
+|-- operator-descriptors/   # msopgen 使用的内部算子描述
+|-- greater-fast/           # GreaterFast 早期独立开发快照
+|-- index-add-fast/         # IndexAddFast 早期独立开发快照
+|-- extra_correctness.py    # 五题附加边界正确性测试
+|-- diagnose_index_add.py   # IndexAdd 定向诊断
+`-- sheet-inspect/          # 赛题表格的只读检查工具
+```
+
+`submission-src/` 是当前最重要的源码入口。每题包含：
+
+```text
+<Operator>/
+|-- op_host/
+|   |-- CMakeLists.txt
+|   |-- <official_name>.cpp
+|   `-- <official_name>_tiling.h
+`-- op_kernel/
+    |-- CMakeLists.txt
+    `-- <official_name>.cpp
+```
+
+正式文件名映射如下：
+
+| 赛题 | Host/Kernel 文件 | Tiling 文件 | 稳定内部算子类型 |
 |---|---|---|---|
-| `Greater` | 通过 | 第一轮优化完成 | 8 核 Ascend C 快路稳定快于 ACLNN 基线约 5.9% |
-| `IndexAdd` | 通过 | 第一轮优化完成 | 15 核 int8 原子累加快路稳定快于 AiCPU 基线约 76.3 倍 |
-| `Transpose` | 通过 | 优化中 | CANN 8.5 基线使用 `aclnnPermute` |
-| `Concat` | 通过 | 待优化 | CANN 8.5 基线使用 `aclnnCat` |
-| `SquareSumV1` | 通过 | 待优化 | 基线使用 `aclnnMul(input, input)` + `aclnnReduceSum` |
+| Greater | `greater.cpp` | `greater_tiling.h` | `GreaterFast` |
+| IndexAdd | `index_add.cpp` | `index_add_tiling.h` | `IndexAddFast` |
+| SquareSumV1 | `square_sum_v1.cpp` | `square_sum_v1_tiling.h` | `SquareSumFast` |
+| Concat | `concat.cpp` | `concat_tiling.h` | `ConcatFast` |
+| Transpose | `transpose.cpp` | `transpose_tiling.h` | `TransposeFast` |
 
-## 评测环境
+平台 `Zip_Check` 会检查正式文件名。仅在 ZIP 内随意改名会造成源码、CMake 和 `.run` 不一致，因此提交包必须从一致的源码状态重新编译。
 
-| 项目 | 配置 |
+## 5. 环境要求
+
+| 项目 | 版本/配置 |
 |---|---|
-| 云端设备 | Huawei Cloud Ascend 910B4 |
+| 设备 | Ascend 910B |
 | CANN | 社区版 8.5.0 |
-| 编译器 | GCC 10.3 |
-| 调用层 | PyTorch + torch_npu CppExtension |
-| 性能工具 | `msprof` |
-| 基础系统 | 比赛提供的 Euler/ModelArts 环境 |
+| 编译器 | GCC/G++ 10.3 |
+| Python | 比赛环境 Python 3.9 |
+| PyTorch NPU | 比赛镜像内置版本 |
+| 操作系统 | openEuler / ModelArts 比赛环境 |
 
-## 公开用例结果
+初始化环境示例：
 
-以下数据来自同一云实例上的公开 `case1`。`time_use` 是赛事脚本输出的原始整数；“约耗时”按 `time_use / 1,000,000` 换算为 profiler 中的微秒值。
+```bash
+source /path/to/Ascend/cann-8.5.0/set_env.sh
+export PATH=/path/to/gcc-10.3/bin:$PATH
+export CC=/path/to/gcc-10.3/bin/gcc
+export CXX=/path/to/gcc-10.3/bin/g++
+```
 
-| 算子 | ACLNN 基线 `time_use` | 优化后三次有效采样 | 优化中位数 | 约耗时 | 本地收益 |
-|---|---:|---|---:|---:|---:|
-| `Greater` | 2,540,500 | 2,390,500 / 2,380,000 / 2,400,000 | 2,390,500 | 2.3905 us | 耗时下降约 5.9% |
-| `IndexAdd` | 235,075,000 | 3,070,000 / 3,090,000 / 3,080,000 | 3,080,000 | 3.0800 us | 约 76.3x |
-| `Concat` | 12,620,500 | - | - | 12.6205 us | 待优化 |
-| `Transpose` | 12,020,500 | - | - | 12.0205 us | 优化中 |
-| `SquareSumV1` | 2,640,500 | - | - | 2.6405 us | 待优化 |
+请勿直接复用其他 CANN 版本生成的工程或 `.run`。
 
-所有基线均同时满足：
+## 6. 构建 Ascend C 算子
 
-- wheel 从当前算子目录干净重建并安装；
-- 日志出现 `case1 verify result pass!`；
-- profiler 正常退出；
-- `time_use` 为非零有效值；
-- 无旧 wheel 或其他算子产物复用。
+算子描述位于 `operator-descriptors/`。以 Greater 为例：
 
-上述结果用于本地迭代和版本选择，不代表赛事平台最终成绩或排名。不同云实例、驱动状态和 profiler 抖动可能造成差异。
+```bash
+msopgen gen \
+  -i operator-descriptors/greater_fast.json \
+  -f pytorch \
+  -c ai_core-ascend910b \
+  -out build/Greater \
+  -lan cpp
+```
 
-## 正确性评测
+随后将对应 `submission-src/Greater/op_host` 和 `op_kernel` 源码同步到生成工程。需要注意：
 
-### 通用附加用例
+- `submission-src` 使用平台正式文件名；
+- descriptor 当前保留经过验证的内部 `*Fast` 算子类型；
+- 生成工程的源文件映射、CMake 路径和 include 名称必须保持一致；
+- 不应仅改文件名而不重新构建 `.run`。
 
-[`extra_correctness.py`](extra_correctness.py) 当前包含 11 个独立于官方 `test_op.py` 的附加用例，全部通过：
+在生成工程中执行：
 
-| 算子 | 覆盖内容 |
-|---|---|
-| `Greater` | FP16 广播与 NaN/Inf、FP32 广播、int32 相等与边界值 |
-| `IndexAdd` | int8 重复索引、FP32 在非零维度上的重复索引 |
-| `Concat` | 负维度、空分片、FP16/FP32 |
-| `Transpose` | 三维置换、恒等置换、FP16/FP32 |
-| `SquareSumV1` | 负轴、`keepdim`、多轴归约、FP16/FP32 |
+```bash
+cd build/Greater
+bash build.sh
+```
 
-### 优化专项验证
+成功后应产生：
 
-`GreaterFast` 已验证：
+```text
+build_out/custom_opp_euleros_aarch64.run
+```
 
-- 2,048 个特殊值组合逐元素零错误；
-- 覆盖 NaN、正负无穷、正负零、相等值和 FP16 最小子正规数；
-- bool 输出底层字节严格规范为 `0/1`；
-- 覆盖 2,176 元素单核路径，以及 FP32、int32、广播、非连续张量等 ACLNN 回退路径。
+目前仓库已经公开核心源码和 descriptor，但尚未把五题工程生成、文件映射、编译与打包整合成完全可移植的一键脚本。
 
-`IndexAddFast` 已验证：
+## 7. 运行公开用例
 
-- 120 条 source 全部写入同一输出行的最坏跨核冲突；
-- int8 正负溢出按模 256 正确回绕；
-- 未命中的输出行保持原始 input；
-- 100 组全范围随机 int8 严格测试零失败；
-- 最坏冲突连续重复运行未发现原子竞态；
-- 公开 profile 中 30 轮均调度 `IndexAddFast`，`InplaceIndexAddAiCpu` 数量为 0。
-
-## 优化实现
-
-### GreaterFast
-
-快路只处理同形状、连续的 FP16 张量，元素数量为 32 的倍数且不超过 16,384；其他输入继续使用 `aclnnGtTensor`。
-
-当前内核使用 `SubRelu + Mins(1) + Cast(CAST_CEIL)` 生成规范 bool 输出。Host tiling 对适合分核的输入最多使用 8 个 Vector Core，非 256 对齐的合法输入走单核快路。
-
-### IndexAddFast
-
-快路严格匹配公开用例的 int8/int32 形状和连续布局：
-
-- `input`: `[32, 128]`, int8；
-- `index`: `[120]`, int32；
-- `source`: `[120, 128]`, int8；
-- `dim`: `0` 或等价负维度。
-
-实现先保留 `result.copy_(input)`，再使用 15 个 Vector Core，每核处理 8 条 source 行，通过 int8 原子写保证重复 index 的并发语义。其他形状、类型、维度或布局回退到 `aclnnIndexAdd`。
-
-分核 A/B 结果：5 核约 3.18 us，15 核约 3.08 us，30 核约 3.98 us，因此最终保留 15 核版本。
-
-## 评测方法
-
-1. 每次运行前清理 `build/`、`dist/`、旧 wheel 和 `PROF*`。
-2. 使用 `run.sh` 重建扩展并通过 `msprof` 运行官方用例。
-3. 强制检查准确性标记、profiler 退出码和非零 `time_use`。
-4. 性能候选至少获得三次有效独立采样，以中位数决定是否保留。
-5. `time_use=0` 或导出不完整的 profile 视为无效，不参与统计。
-6. 优化快路之外的输入必须继续通过 ACLNN 回退测试。
-
-运行单个公开用例：
+单题测试入口：
 
 ```bash
 cd case_910b/<Operator>
 bash run.sh 1
 ```
 
-`GreaterFast` 和 `IndexAddFast` 还需要先构建对应的 Ascend C 算子包，并让扩展能够找到生成的 opapi 动态库。当前脚本仍包含比赛云实例路径，跨机器复现前需要完成路径参数化。
+Greater、IndexAdd 和 Transpose 的 wrapper 需要链接相应 opapi 库，可以通过环境变量指定：
 
-## 目录结构
-
-```text
-.
-|-- case_910b/              # 五题 CppExtension、公开用例与严格 run.sh
-|   |-- Greater/
-|   |-- IndexAdd/
-|   |-- Concat/
-|   |-- Transpose/
-|   `-- SquareSumV1/
-|-- greater-fast/           # GreaterFast Ascend C kernel、Host tiling 与算子定义
-|-- index-add-fast/         # IndexAddFast Ascend C kernel、Host tiling 与算子定义
-|-- diagnose_index_add.py   # IndexAdd CPU/NPU/自定义扩展定向诊断
-|-- extra_correctness.py    # 五题附加边界正确性测试
-`-- sheet-inspect/          # 赛题说明表格的只读检查工具
+```bash
+export GREATER_FAST_LIB_DIR=/path/to/Greater/build_out/op_api/lib
+export INDEX_ADD_FAST_LIB_DIR=/path/to/IndexAdd/build_out/op_api/lib
+export TRANSPOSE_FAST_LIB_DIR=/path/to/Transpose/build_out/op_api/lib
 ```
 
-## 已知限制与风险
+成功运行至少应满足：
 
-- 当前两个快路都刻意限制适用范围，隐藏用例不匹配时依赖 ACLNN 回退。
-- `IndexAdd` 的 FP16 ACLNN 回退与原生 NPU 实现都可能因原子累加顺序产生非确定误差；观察到相对 CPU 的最大差为 `0.0078125`。该问题不属于 int8 快路，但仍需在后续通用化时处理。
-- 自定义算子包的构建、安装和路径配置尚未整理为完全可移植的一键流程。
-- 仓库尚未选择开源许可证；正式提交前应按赛事要求补充。
+- wheel 从当前源码重新构建；
+- 日志出现 `test pass`；
+- 日志出现 `case1 verify result pass!`；
+- profiler 正常退出；
+- 目标算子实际调度到预期 kernel；
+- 没有复用其他版本留下的 wheel、动态库或缓存。
 
-## 下一步
+## 8. 附加正确性验证
 
-- 完成 `Transpose` 的 Ascend C 快路设计、正确性验证和性能 A/B；
-- 依次评估 `Concat` 与 `SquareSumV1` 的融合收益；
-- 将算子包构建与动态库路径改为环境变量或相对路径；
-- 增加可复现的完整构建说明和自动化回归脚本；
-- 按赛事要求整理最终提交结构、许可证和 GitCode PR。
+[`extra_correctness.py`](extra_correctness.py) 包含公开用例以外的附加测试：
+
+| 算子 | 主要覆盖 |
+|---|---|
+| Greater | FP16 广播、NaN/Inf、FP32、int32、相等和边界值 |
+| IndexAdd | 重复 index、int8 回绕、FP32 非零维度 |
+| Concat | 负维度、空分片、FP16/FP32 |
+| Transpose | 三维置换、恒等置换、FP16/FP32 |
+| SquareSumV1 | 负轴、keepdim、多轴归约、FP16/FP32 |
+
+这些测试用于验证 wrapper 的泛化回退和算子语义，不等价于赛事隐藏用例。
+
+## 9. 提交包要求
+
+赛事页面要求每次只提交一道题，并将以下内容放入同一个目录：
+
+- `op_host/`
+- `op_kernel/`
+- 与源码一致的 `custom_*.run`
+
+随后必须使用赛事提供的 `zip_op.sh` 打包：
+
+```bash
+bash zip_op.sh Greater
+```
+
+Greater 的正确 ZIP 结构示例：
+
+```text
+Greater_zip/
+|-- op_host/
+|   |-- CMakeLists.txt
+|   |-- greater.cpp
+|   `-- greater_tiling.h
+|-- op_kernel/
+|   |-- CMakeLists.txt
+|   `-- greater.cpp
+`-- custom_opp_euleros_aarch64.run
+```
+
+本仓库不提交 `.run`、wheel、profile 数据库和构建缓存。二进制提交包应由参赛者在 CANN 8.5.0 的目标环境中从对应提交源码重新构建。
+
+## 10. 已知问题
+
+1. 最新“内部算子类型直接改成官方名称”的完整工程仍有链接问题，已观察到 `cannot find -lascend_kernels`。因此当前稳定方案保留经过验证的内部 `*Fast` 类型，并在提交层使用平台要求的正式文件名。
+2. Concat 的 `ConcatD` 在线名称迁移尚未完成最终公开 harness 验证；仓库保留早期稳定 `ConcatFast` 提交源码。
+3. SquareSumV1 当前最快 runner 路径是官方组合实现，而 `submission-src` 中是已验证正确的自定义融合版本。
+4. 公开用例通过不保证隐藏用例泛化或榜单成绩。
+5. 五题尚未形成跨机器的一键生成、编译、安装、测试和打包流水线。
+6. 仓库当前未声明开源许可证；正式对外复用前需要补充合适的 LICENSE。
+
+## 11. 安全与仓库卫生
+
+以下内容不会进入 Git：
+
+- SSH 私钥、`.pem`、`.key`；
+- 云账号、令牌和本地 `.env`；
+- `.run`、`.so`、wheel、目标文件；
+- `PROF*`、数据库和 profiler 日志；
+- 本地同步、解压和文档检查临时目录；
+- 比赛代金券、个人联系方式和其他提交材料。
+
+提交前建议执行：
+
+```bash
+git status --short
+git diff --check
+git ls-files | grep -Ei '\.(pem|key|run|so|whl)$'
+```
+
+## 12. 后续计划
+
+- 修复正式内部算子名称工程的 `ascend_kernels` 链接与生成依赖；
+- 完成 Concat 在线契约的公开用例闭环；
+- 对 SquareSumV1 融合核继续做性能 A/B；
+- 扩展五题隐藏形状、dtype、广播和非连续布局覆盖；
+- 增加统一的一键构建、测试、profile 和提交包脚本；
+- 按赛事要求准备 GitCode 开源 PR。
+
+## 13. 免责声明
+
+仓库中的性能数据是本地云实例上的工程测量，仅用于优化决策。赛事平台的最终成绩由官方隐藏用例、精度检查和计时环境决定。

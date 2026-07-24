@@ -1,0 +1,124 @@
+[
+  {
+    "op": "ConcatFast",
+    "language": "cpp",
+    "input_desc": [
+      {
+        "name": "x0",
+        "param_type": "required",
+        "format": ["ND"],
+        "type": ["float16"]
+      },
+      {
+        "name": "x1",
+        "param_type": "optional",
+        "format": ["ND"],
+        "type": ["float16"]
+      },
+      {
+        "name": "x2",
+        "param_type": "optional",
+        "format": ["ND"],
+        "type": ["float16"]
+      },
+      {
+        "name": "x3",
+        "param_type": "optional",
+        "format": ["ND"],
+        "type": ["float16"]
+      },
+      {
+        "name": "x4",
+        "param_type": "optional",
+        "format": ["ND"],
+        "type": ["float16"]
+      },
+      {
+        "name": "x5",
+        "param_type": "optional",
+        "format": ["ND"],
+        "type": ["float16"]
+      },
+      {
+        "name": "x6",
+        "param_type": "optional",
+        "format": ["ND"],
+        "type": ["float16"]
+      },
+      {
+        "name": "x7",
+        "param_type": "optional",
+        "format": ["ND"],
+        "type": ["float16"]
+      },
+      {
+        "name": "x8",
+        "param_type": "optional",
+        "format": ["ND"],
+        "type": ["float16"]
+      },
+      {
+        "name": "x9",
+        "param_type": "optional",
+        "format": ["ND"],
+        "type": ["float16"]
+      },
+      {
+        "name": "x10",
+        "param_type": "optional",
+        "format": ["ND"],
+        "type": ["float16"]
+      },
+      {
+        "name": "x11",
+        "param_type": "optional",
+        "format": ["ND"],
+        "type": ["float16"]
+      },
+      {
+        "name": "x12",
+        "param_type": "optional",
+        "format": ["ND"],
+        "type": ["float16"]
+      },
+      {
+        "name": "x13",
+        "param_type": "optional",
+        "format": ["ND"],
+        "type": ["float16"]
+      },
+      {
+        "name": "x14",
+        "param_type": "optional",
+        "format": ["ND"],
+        "type": ["float16"]
+      },
+      {
+        "name": "x15",
+        "param_type": "optional",
+        "format": ["ND"],
+        "type": ["float16"]
+      }
+    ],
+    "attr": [
+      {
+        "name": "inputCount",
+        "param_type": "required",
+        "type": "int"
+      },
+      {
+        "name": "dim",
+        "param_type": "required",
+        "type": "int"
+      }
+    ],
+    "output_desc": [
+      {
+        "name": "y",
+        "param_type": "required",
+        "format": ["ND"],
+        "type": ["float16"]
+      }
+    ]
+  }
+]

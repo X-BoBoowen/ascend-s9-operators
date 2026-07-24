@@ -108,11 +108,21 @@ at::Tensor my_op_impl_npu(const at::Tensor& input, const at::Tensor& index, cons
         input.scalar_type() == at::kChar &&
         index.scalar_type() == at::kInt &&
         source.scalar_type() == at::kChar &&
-        input.dim() == 2 && input.size(0) == 32 && input.size(1) == 128 &&
-        index.dim() == 1 && index.size(0) == 120 &&
-        source.dim() == 2 && source.size(0) == 120 && source.size(1) == 128 &&
+        input.dim() == 2 &&
+        index.dim() == 1 &&
+        source.dim() == 2 &&
         normalized_dim == 0 &&
-        input.is_contiguous() && index.is_contiguous() && source.is_contiguous();
+        input.size(0) > 0 &&
+        input.size(1) > 0 &&
+        input.size(1) <= 16384 &&
+        input.size(1) % 32 == 0 &&
+        index.numel() > 0 &&
+        index.numel() <= 256 &&
+        source.size(0) == index.numel() &&
+        source.size(1) == input.size(1) &&
+        input.is_contiguous() &&
+        index.is_contiguous() &&
+        source.is_contiguous();
     auto a = at::empty(
         {4096, 4096},
         at::TensorOptions()
