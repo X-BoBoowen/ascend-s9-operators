@@ -1,0 +1,50 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+
+# Node.js
+node_modules/
+
+# Build outputs
+build/
+build_out/
+build_unique/
+dist/
+cmake-build-*/
+*.o
+*.obj
+*.so
+*.dll
+*.dylib
+*.whl
+
+# Ascend profiling and test output
+PROF*/
+*.log
+.last_test.log
+checkpoints/
+*.tgz
+*.tar.gz
+
+# Local configuration and credentials
+.env
+.env.*
+*.key
+*.pem
+
+# Editors and operating systems
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+
+# Local inspection and synchronization workspaces
+/current-submission-extracted-*/
+/final-official-contract-*/
+/final-zips-official-contract-*/
+/remote-current-*/
+/submission-docx-xml/
+/xlsx-inspect/
+/transpose-fast/

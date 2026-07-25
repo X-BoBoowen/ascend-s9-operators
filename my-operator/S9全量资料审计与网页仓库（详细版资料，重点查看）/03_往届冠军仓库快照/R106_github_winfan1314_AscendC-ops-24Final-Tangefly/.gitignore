@@ -1,0 +1,15 @@
+.vscode
+build
+build_out
+dist
+extra-info
+kernel_meta
+*.log
+fusion_result.json
+custom_ops.egg-info
+__pycache__
+**/input/*
+**/output/*
+!**/input/
+!**/output/
+!**/.keep

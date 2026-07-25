@@ -1,0 +1,53 @@
+[
+    {
+        "op": "Copysign",
+        "language":"cpp",
+        "input_desc": [
+            {
+                "name": "input",
+                "param_type": "required",
+                "format": [
+                    "ND",
+                    "ND",
+                    "ND"
+                ],
+                "type": [
+                    "fp16",
+                    "fp32",
+                    "bf16"
+                ]
+            },
+            {
+                "name": "other",
+                "param_type": "required",
+                "format": [
+                    "ND",
+                    "ND",
+                    "ND"
+                ],
+                "type": [
+                    "fp16",
+                    "fp32",
+                    "bf16"
+                ]
+            }
+        ],
+        "output_desc": [
+            {
+                "name": "out",
+                "param_type": "required",
+                "format": [
+                    "ND",
+                    "ND",
+                    "ND"
+                ],
+                "type": [
+                    "fp16",
+                    "fp32",
+                    "bf16"
+                ]
+            }
+        ]
+    }
+]
+

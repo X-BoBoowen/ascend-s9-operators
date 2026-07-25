@@ -1,0 +1,75 @@
+import torch
+import torch_npu
+from torch_npu.testing.testcase import TestCase, run_tests
+import custom_ops_lib
+torch.npu.config.allow_internal_format = False
+import numpy as np
+import tensorflow as tf
+import sys  
+import threading
+
+
+
+def run_with_timeout(func, args=(), kwargs={}, timeout=30):
+    result = []
+    def target():
+        try:
+            result.append(func(*args, **kwargs))
+        except Exception as e:
+            result.append(e)
+            print("函数执行异常:",e)
+    thread = threading.Thread(target=target)
+    thread.start()
+    thread.join(timeout)
+    if thread.is_alive():
+        return None
+    if isinstance(result[0], Exception):
+        raise result[0]
+    return result[0]
+
+def verify_result(real_result, golden):
+    if golden.dtype == torch.float32:
+        loss = 1e-4  # 容忍偏差，一般fp16要求绝对误差和相对误差均不超过千分之一
+    else:
+        loss = 1e-3  # 容忍偏差，一般fp32要求绝对误差和相对误差均不超过百万分之一
+    minimum = 10e-10
+    result = torch.abs(real_result - golden)  # 计算运算结果和预期结果偏差
+    deno = torch.maximum(torch.abs(real_result), torch.abs(golden))  # 获取最大值并组成新数组
+    result_atol = torch.less_equal(result, loss)  # 计算绝对误差
+    result_rtol = torch.less_equal(result / torch.add(deno, minimum), loss)  # 计算相对误差
+    if not result_rtol.all() and not result_atol.all():
+        if torch.sum(result_rtol == False) > real_result.element_size() * loss and torch.sum(result_atol == False) > real_result.element_size() * loss:  # 误差超出预期时返回打印错误，返回对比失败
+            print("[ERROR] result error")
+            return False
+    print("test pass")
+    return True
+
+class TestCustomOP(TestCase):
+    def test_custom_op_case1(self):
+        x1 = torch.linspace(1, 10, 8 * 1024)
+        x2= torch.linspace(0, 4, 8 * 1024)
+        x1 = x1.view(8,1024).to(torch.float16)
+        x2 = x2.view(8,1024).to(torch.float16)
+        cpu_result = torch.pow(x1, x2)
+
+        x1_npu = x1.npu()
+        x2_npu = x2.npu()
+
+        # 修改输入
+        output = run_with_timeout(custom_ops_lib.custom_op, args=(x1_npu, x2_npu), timeout=30)
+        if output is None:
+            print("case1 execution timed out!")
+        else:
+            output = output.cpu()
+            if verify_result(output, cpu_result):
+                print("case1 verify result pass!")
+            else:
+                print("case1 verify result failed!")
+
+    
+
+if __name__ == "__main__":
+    print(sys.argv)
+    if sys.argv[1] == '1':
+        TestCustomOP().test_custom_op_case1()
+    

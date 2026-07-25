@@ -1,0 +1,45 @@
+[
+  {
+    "op": "Logcumsumexp",
+    "input_desc": [
+      {
+        "name": "input",
+        "format": [
+          "ND",
+          "ND",
+          "ND"
+        ],
+        "type": [
+          "bf16",
+          "float",
+          "float16"
+        ],
+        "param_type": "required"
+      }
+
+    ],
+    "output_desc": [
+      {
+        "name": "out",
+        "format": [
+          "ND",
+          "ND",
+          "ND"
+        ],
+        "type": [
+          "bf16",
+          "float",
+          "float16"
+        ],
+        "param_type": "required"
+      }
+    ],
+    "attr": [
+      {
+        "name": "dim",
+        "param_type": "required",
+        "type": "int"
+      }
+    ]
+  }
+]

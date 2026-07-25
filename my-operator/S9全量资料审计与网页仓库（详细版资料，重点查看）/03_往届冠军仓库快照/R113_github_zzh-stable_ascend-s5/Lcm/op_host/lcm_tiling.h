@@ -1,0 +1,33 @@
+
+#include "register/tilingdata_base.h"
+
+namespace optiling {
+BEGIN_TILING_DATA_DEF(LcmTilingData)
+  TILING_DATA_FIELD_DEF(uint32_t, maxDim);
+  TILING_DATA_FIELD_DEF_ARR(uint32_t, 8, shapeInf1);
+  TILING_DATA_FIELD_DEF_ARR(uint32_t, 8, shapeInf2);
+END_TILING_DATA_DEF;
+
+REGISTER_TILING_DATA_CLASS(Lcm, LcmTilingData)
+
+BEGIN_TILING_DATA_DEF(LcmTilingData_0)
+  TILING_DATA_FIELD_DEF(uint32_t, totalNum);
+END_TILING_DATA_DEF;
+REGISTER_TILING_DATA_CLASS(Lcm_0, LcmTilingData_0) 
+
+BEGIN_TILING_DATA_DEF(LcmTilingData_1)
+  TILING_DATA_FIELD_DEF(uint32_t, totalNum);
+END_TILING_DATA_DEF;
+REGISTER_TILING_DATA_CLASS(Lcm_1, LcmTilingData_1) 
+
+BEGIN_TILING_DATA_DEF(LcmTilingData_2)
+TILING_DATA_FIELD_DEF_ARR(uint16_t, 3, shapeInf);
+END_TILING_DATA_DEF;
+REGISTER_TILING_DATA_CLASS(Lcm_2, LcmTilingData_2) 
+
+BEGIN_TILING_DATA_DEF(LcmTilingData_3)
+TILING_DATA_FIELD_DEF_ARR(uint16_t, 3, shapeInf);
+END_TILING_DATA_DEF;
+REGISTER_TILING_DATA_CLASS(Lcm_3, LcmTilingData_3) 
+
+}

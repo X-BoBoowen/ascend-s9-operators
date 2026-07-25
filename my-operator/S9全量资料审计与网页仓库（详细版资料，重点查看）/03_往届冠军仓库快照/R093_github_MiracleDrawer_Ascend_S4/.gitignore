@@ -1,0 +1,41 @@
+# 屏蔽根目录下的 build_out 文件夹及其所有内容
+MatMul/build_out/
+
+# 屏蔽 test_cases 目录下的 extra-info 文件夹
+MatMul/test_cases/extra-info/
+MatMul/test_cases/kernel_meta
+MatMul/test_cases/*.txt
+
+*.log
+*.tmp
+*.swp
+*.bak
+.DS_Store
+.idea/
+.vscode/
+
+# 编译产物/二进制文件
+build/
+dist/
+*.o
+*.so
+*.a
+*.exe
+*.dll
+*.run
+# 依赖目录（如 Python 的 venv、Node.js 的 node_modules）
+venv/
+env/
+node_modules/
+
+# 本地配置文件（敏感信息！）
+config/local.yaml
+secrets.ini
+
+# 测试生成的临时文件
+test-results/
+coverage/
+
+# 特定于 Ascend 项目的自定义忽略（示例）
+logs/
+temp/

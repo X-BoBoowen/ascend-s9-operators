@@ -1,0 +1,13 @@
+{"kind":"workbook","id":"wb/0sb7m8","sheets":6}
+{"kind":"sheet","id":"ws/6befa9","name":"总览","index":0,"range":"A1:E17","address":"A1:E17","formulas":6}
+{"kind":"formula","sheet":"总览","address":"B5","formula":"=COUNTA('外部链接'!A4:A300)"}
+{"kind":"formula","sheet":"总览","address":"B6","formula":"=COUNTIF('外部链接'!F4:F300,\"Archived\")"}
+{"kind":"formula","sheet":"总览","address":"B7","formula":"=COUNTIF('外部链接'!F4:F300,\"Failed\")"}
+{"kind":"formula","sheet":"总览","address":"B8","formula":"=COUNTA('仓库拉取'!A4:A200)"}
+{"kind":"formula","sheet":"总览","address":"B9","formula":"=COUNTIF('仓库拉取'!E4:E200,\"Cloned\")+COUNTIF('仓库拉取'!E4:E200,\"AlreadyPresent\")"}
+{"kind":"formula","sheet":"总览","address":"B10","formula":"=COUNTIF('仓库拉取'!E4:E200,\"Failed\")"}
+{"kind":"sheet","id":"ws/ea7n8r","name":"S9规格与当前缺口","index":1,"range":"A1:H8","address":"A1:H8"}
+{"kind":"sheet","id":"ws/g00x1r","name":"外部链接","index":2,"range":"A1:I170","address":"A1:I170"}
+{"kind":"sheet","id":"ws/vfna3p","name":"仓库拉取","index":3,"range":"A1:J116","address":"A1:J116"}
+{"kind":"sheet","id":"ws/kvn2lc","name":"往届代码审读","index":4,"range":"A1:O46","address":"A1:O46"}
+{"kind":"sheet","id":"ws/dbk17q","name":"历届工作簿链接","index":5,"range":"A1:C43","address":"A1:C43"}

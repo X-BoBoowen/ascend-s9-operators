@@ -1,0 +1,89 @@
+关于pybind编写测试用例的一些方式。
+在提供的pybind模版的case用例中，大家可以根据直接执行python3 test_op 1完成case的验证，
+参赛者可以通过修改输入实现各种输入场景的验证，而输出的获取通过extension/custom_op.cpp中的my_op_impl_npu()接口返回。
+在这个过程中，部分样例可能由于my_op_impl_npu()接口返回的result的shape和预期的不符，原因可能为该样例覆盖的场景未能满足所有输入场景，
+可以根据标杆的输出结果做适当的修改，以达到标杆输出和该case输出的shape保证一致。
+
+根据以上，我们提供以下建议：
+一：接口覆盖范围优化
+	比如在Pows算子提供的用例中，接口如下：
+	at::Tensor my_op_impl_npu(const at::Tensor& x1, const at::Tensor& x2) {
+		// 创建输出，根据实际需求判断根据第几个输入创建输出，确保输出类型正确
+		at::Tensor result = at::empty_like(x1);
+
+		// 调用aclnn接口计算
+		EXEC_NPU_CMD(aclnnPows, x1, x2,result);
+		return result;
+	}
+
+	这个场景下的result设置大小等同于x1的shape。满足x2做广播的场景如:x1.shape=[3,5],x2.shape=[1,5]
+	但是不满足x1做广播的场景如:x1.shape=[1,5], x2.shape=[3,5]
+	所以此处可以修改 at::Tensor result = at::empty_like(x2);
+	或者进一步优化选取各个维度的最大值，以覆盖更多场景，确保result.shape和标杆输出shape一致。如x1.shape=[3,1],x2.shape=[1,3]
+
+	另外如Gather算子的my_op_impl_npu接口优化对比：
+	原接口的result.shape仅覆盖了batch_dim为0或1的情况。
+	at::Tensor my_op_impl_npu_v1(const at::Tensor& self, const at::Tensor& then, bool validate,int64_t batch_dim,bool is_preprocessed, bool negative_index_support) {
+		// 创建输出，根据实际需求判断根据第几个输入创建输出，确保输出类型正确
+		int64_t dimNum = self.sizes().size();
+		int64_t dimList[dimNum];
+		std::vector<int64_t> result_shape;
+		for(int i = 0; i < dimNum; i++){
+			dimList[i] = self.sizes().data()[i];
+			if(i != 0)
+			{
+				result_shape.push_back(self.sizes().data()[i]);
+			}
+			else
+			{
+				result_shape.push_back(then.sizes().data()[0]);
+			}
+		}
+
+		at::Tensor result = at::empty(result_shape, at::TensorOptions().dtype(self.dtype()).device(at::kCPU));
+
+		EXEC_NPU_CMD(aclnnGather, self, then,validate,batch_dim ,is_preprocessed,negative_index_support,result);
+		return result;
+	}
+	修改后可以支持batch_dim范围更大的情况。
+	at::Tensor my_op_impl_npu(const at::Tensor& self, const at::Tensor& then, bool validate,int64_t batch_dim,bool is_preprocessed, bool negative_index_support) {
+		// 创建输出，根据实际需求判断根据第几个输入创建输出，确保输出类型正确
+		// self.sizes().size() + then.sizes().size() - batch_dim - 1
+		int64_t dimNum = self.sizes().size();
+		int64_t indicesNum = then.sizes().size();
+		int64_t rankNum = dimNum + indicesNum - batch_dim - 1;
+		int64_t dimList[rankNum];
+		std::vector<int64_t> result_shape;
+		for(int i = 0; i < rankNum; i++){
+			dimList[i] = self.sizes().data()[i];
+			if(i <= batch_dim)
+			{
+				result_shape.push_back(then.sizes().data()[i]);
+			}
+			else
+			{
+				result_shape.push_back(self.sizes().data()[i]);
+			}
+		}
+
+		at::Tensor result = at::empty(result_shape, at::TensorOptions().dtype(self.dtype()).device(at::kCPU));
+
+		EXEC_NPU_CMD(aclnnGather, self, then,validate,batch_dim ,is_preprocessed,negative_index_support,result);
+		return result;
+	}
+
+二，直接赋值：
+	由于我们的目的是获取到和标杆等同大小的输出结果。因此我们可以直接获取标杆的输出结果信息，然后较为粗暴的将result.shape直接赋值。
+	比如标杆gather算子的输出结果shape大小假设为[3,4,5]
+	那么我们文件里可以直接设置：
+	at::Tensor my_op_impl_npu(const at::Tensor& self, const at::Tensor& then, bool validate,int64_t batch_dim,bool is_preprocessed, bool negative_index_support) {	
+		std::vector<int64_t> result_shape = {3,4,5};
+		at::Tensor result = at::empty(result_shape, at::TensorOptions().dtype(self.dtype()).device(at::kCPU));
+
+		EXEC_NPU_CMD(aclnnGather, self, then,validate,batch_dim ,is_preprocessed,negative_index_support,result);
+		return result;
+	}
+	这种方式较为粗暴，且每次改动需要做重新编译，但可以较为简单快速的去测试新的用例，不用花太多时间去编写一个覆盖多场景的my_op_impl_npu()接口。
+	
+三，老方法aclnn调用
+	如果实在不适应pybind的调用方法，或者同学说没接触过python，用着不顺手。也可以根据S2,S3赛季的aclnn测试用例的调用方式，自行编写用例。并不限于使用哪种方式去做测试调用。

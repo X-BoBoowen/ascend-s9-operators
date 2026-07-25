@@ -1,0 +1,79 @@
+/**
+*
+* Copyright (C) 2024. Huawei Technologies Co., Ltd. All rights reserved.
+*
+* This program is distributed in the hope that it will be useful,
+* but WITHOUT ANY WARRANTY; without even the implied warranty of
+* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+*/
+#include <torch/extension.h>
+#include <torch/csrc/autograd/custom_function.h>
+#include "../common/pytorch_npu_helper.hpp"
+using torch::autograd::Function;
+using torch::autograd::AutogradContext;
+using tensor_list = std::vector<at::Tensor>;
+using namespace at;
+
+// 修改输入
+at::Tensor my_op_impl_npu_v1(const at::Tensor& self, const at::Tensor& then, bool validate,int64_t batch_dim,bool is_preprocessed, bool negative_index_support) {
+    // 创建输出，根据实际需求判断根据第几个输入创建输出，确保输出类型正确
+    int64_t dimNum = self.sizes().size();
+    int64_t dimList[dimNum];
+    std::vector<int64_t> result_shape;
+    for(int i = 0; i < dimNum; i++){
+        dimList[i] = self.sizes().data()[i];
+        if(i != 0)
+        {
+            result_shape.push_back(self.sizes().data()[i]);
+        }
+        else
+        {
+            result_shape.push_back(then.sizes().data()[0]);
+        }
+    }
+
+    at::Tensor result = at::empty(result_shape, at::TensorOptions().dtype(self.dtype()).device(self.options().device()));
+
+    EXEC_NPU_CMD(aclnnGather, self, then,validate,batch_dim ,is_preprocessed,negative_index_support,result);
+    return result;
+}
+
+at::Tensor my_op_impl_npu(const at::Tensor& self, const at::Tensor& then, bool validate,int64_t batch_dim,bool is_preprocessed, bool negative_index_support) {
+    // 创建输出，根据实际需求判断根据第几个输入创建输出，确保输出类型正确
+    // self.sizes().size() + then.sizes().size() - batch_dim - 1
+    int64_t dimNum = self.sizes().size();
+    int64_t indicesNum = then.sizes().size();
+    int64_t rankNum = dimNum + indicesNum - batch_dim - 1;
+    int64_t dimList[rankNum];
+    std::vector<int64_t> result_shape;
+    for(int i = 0; i < rankNum; i++){
+        dimList[i] = self.sizes().data()[i];
+        if(i <= batch_dim)
+        {
+            result_shape.push_back(then.sizes().data()[i]);
+        }
+        else
+        {
+            result_shape.push_back(self.sizes().data()[i]);
+        }
+    }
+
+    at::Tensor result = at::empty(result_shape, at::TensorOptions().dtype(self.dtype()).device(self.options().device()));
+
+    EXEC_NPU_CMD(aclnnGather, self, then,validate,batch_dim ,is_preprocessed,negative_index_support,result);
+    return result;
+}
+
+TORCH_LIBRARY(myops, m) {
+    m.def("my_op(Tensor self, Tensor self,bool validate,int batch_dim, bool is_preprocessed,bool negative_index_support) -> Tensor");
+}
+
+// 不修改
+TORCH_LIBRARY_IMPL(myops, PrivateUse1, m) {
+    m.impl("my_op", &my_op_impl_npu);
+}
+
+
+PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
+    m.def("custom_op", &my_op_impl_npu, "tf.where");
+}

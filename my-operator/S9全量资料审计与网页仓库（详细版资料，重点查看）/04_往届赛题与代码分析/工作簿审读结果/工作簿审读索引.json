@@ -1,0 +1,105 @@
+[
+  {
+    "fileName": "S4基础性能赛题_01.xlsx",
+    "inputPath": "D:\\29722\\Desktop\\GCC\\提交相关材料\\S9全量资料审计与网页仓库归档_20260725\\04_往届赛题与代码分析\\赛题工作簿\\S4基础性能赛题_01.xlsx",
+    "inspectionFile": "D:\\29722\\Desktop\\GCC\\提交相关材料\\S9全量资料审计与网页仓库归档_20260725\\04_往届赛题与代码分析\\工作簿审读结果\\S4基础性能赛题_01.ndjson",
+    "urls": [
+      "https://pytorch.ac.cn/docs/stable/generated/torch.nn.functional.rms_norm.html#torch.nn.functional.rms_norm",
+      "https://pytorch.ac.cn/docs/stable/generated/torch.pow.html",
+      "https://pytorch.org/docs/2.1/generated/torch.reshape.html#torch.reshape",
+      "https://tensorflow.google.cn/api_docs/python/tf/gather",
+      "https://tensorflow.google.cn/api_docs/python/tf/raw_ops/SelectV2"
+    ]
+  },
+  {
+    "fileName": "S4挑战性能赛题_01.xlsx",
+    "inputPath": "D:\\29722\\Desktop\\GCC\\提交相关材料\\S9全量资料审计与网页仓库归档_20260725\\04_往届赛题与代码分析\\赛题工作簿\\S4挑战性能赛题_01.xlsx",
+    "inspectionFile": "D:\\29722\\Desktop\\GCC\\提交相关材料\\S9全量资料审计与网页仓库归档_20260725\\04_往届赛题与代码分析\\工作簿审读结果\\S4挑战性能赛题_01.ndjson",
+    "urls": [
+      "https://pytorch.org/docs/2.1/generated/torch.Tensor.scatter_reduce_.html#torch.Tensor.scatter_reduce_",
+      "https://pytorch.org/docs/stable/generated/torch.eye.html",
+      "https://pytorch.org/docs/stable/generated/torch.heaviside.html#",
+      "https://pytorch.org/docs/stable/generated/torch.linalg.solve_ex.html",
+      "https://pytorch.org/docs/stable/generated/torch.matmul.html"
+    ]
+  },
+  {
+    "fileName": "S5基础性能赛题_01.xlsx",
+    "inputPath": "D:\\29722\\Desktop\\GCC\\提交相关材料\\S9全量资料审计与网页仓库归档_20260725\\04_往届赛题与代码分析\\赛题工作簿\\S5基础性能赛题_01.xlsx",
+    "inspectionFile": "D:\\29722\\Desktop\\GCC\\提交相关材料\\S9全量资料审计与网页仓库归档_20260725\\04_往届赛题与代码分析\\工作簿审读结果\\S5基础性能赛题_01.ndjson",
+    "urls": [
+      "https://docs.pytorch.org/docs/2.1/generated/torch.logsumexp.html#torch-logsumexp",
+      "https://docs.pytorch.org/docs/2.1/generated/torch.sort.html#torch.sort",
+      "https://docs.scipy.org/doc/scipy/reference/generated/scipy.special.fresnel.html#scipy.special.fresnel",
+      "https://tensorflow.google.cn/api_docs/python/tf/gather?hl=en",
+      "https://www.hiascend.com/document/detail/zh/CANNCommunityEdition/82RC1alpha002/API/aolapi/context/aclnnGroupedMatmulV4.md"
+    ]
+  },
+  {
+    "fileName": "S5挑战性能赛题_01.xlsx",
+    "inputPath": "D:\\29722\\Desktop\\GCC\\提交相关材料\\S9全量资料审计与网页仓库归档_20260725\\04_往届赛题与代码分析\\赛题工作簿\\S5挑战性能赛题_01.xlsx",
+    "inspectionFile": "D:\\29722\\Desktop\\GCC\\提交相关材料\\S9全量资料审计与网页仓库归档_20260725\\04_往届赛题与代码分析\\工作簿审读结果\\S5挑战性能赛题_01.ndjson",
+    "urls": [
+      "https://docs.pytorch.org/docs/2.1/generated/torch.autograd.functional.jvp.html#torch.autograd.functional.jvp",
+      "https://docs.pytorch.org/docs/2.1/generated/torch.bitwise_left_shift.html#torch-bitwise-left-shift",
+      "https://docs.pytorch.org/docs/2.1/generated/torch.copysign.html#torch-copysign",
+      "https://docs.pytorch.org/docs/2.1/generated/torch.lcm.html#torch.lcm",
+      "https://docs.pytorch.org/docs/2.1/generated/torch.nn.functional.glu.html#torch.nn.functional.glu"
+    ]
+  },
+  {
+    "fileName": "S6基础性能赛题_01.xlsx",
+    "inputPath": "D:\\29722\\Desktop\\GCC\\提交相关材料\\S9全量资料审计与网页仓库归档_20260725\\04_往届赛题与代码分析\\赛题工作簿\\S6基础性能赛题_01.xlsx",
+    "inspectionFile": "D:\\29722\\Desktop\\GCC\\提交相关材料\\S9全量资料审计与网页仓库归档_20260725\\04_往届赛题与代码分析\\工作簿审读结果\\S6基础性能赛题_01.ndjson",
+    "urls": [
+      "https://docs.pytorch.org/docs/2.5/generated/torch.Tensor.expand.html",
+      "https://docs.pytorch.org/docs/2.5/generated/torch.argmin.html#torch-argmin",
+      "https://docs.pytorch.org/docs/2.5/generated/torch.argsort.html#torch-argsort",
+      "https://docs.pytorch.org/docs/2.5/generated/torch.nn.GroupNorm.html#torch.nn.GroupNorm",
+      "https://docs.pytorch.org/docs/stable/generated/torch.nn.LSTM.html#torch.nn.LSTM",
+      "https://github.com/pytorch/pytorch/blob/main/aten/src/ATen/native/RNN.cpp"
+    ]
+  },
+  {
+    "fileName": "S6挑战性能赛题_01.xlsx",
+    "inputPath": "D:\\29722\\Desktop\\GCC\\提交相关材料\\S9全量资料审计与网页仓库归档_20260725\\04_往届赛题与代码分析\\赛题工作簿\\S6挑战性能赛题_01.xlsx",
+    "inspectionFile": "D:\\29722\\Desktop\\GCC\\提交相关材料\\S9全量资料审计与网页仓库归档_20260725\\04_往届赛题与代码分析\\工作簿审读结果\\S6挑战性能赛题_01.ndjson",
+    "urls": [
+      "https://docs.pytorch.org/docs/2.5/generated/torch.fmin.html#torch.fmin",
+      "https://docs.pytorch.org/docs/2.5/generated/torch.hypot.html#torch.hypot",
+      "https://docs.pytorch.org/docs/2.5/generated/torch.logcumsumexp.html#torch-logcumsumexp",
+      "https://docs.pytorch.org/docs/2.5/generated/torch.nn.FractionalMaxPool3d.html#fractionalmaxpool3d"
+    ]
+  },
+  {
+    "fileName": "算子挑战赛S9赛题_01.xlsx",
+    "inputPath": "D:\\29722\\Desktop\\GCC\\提交相关材料\\S9全量资料审计与网页仓库归档_20260725\\04_往届赛题与代码分析\\赛题工作簿\\算子挑战赛S9赛题_01.xlsx",
+    "inspectionFile": "D:\\29722\\Desktop\\GCC\\提交相关材料\\S9全量资料审计与网页仓库归档_20260725\\04_往届赛题与代码分析\\工作簿审读结果\\算子挑战赛S9赛题_01.ndjson",
+    "urls": [
+      "https://docs.pytorch.org/docs/2.5/generated/torch.cat.html#torch.cat",
+      "https://docs.pytorch.org/docs/2.5/generated/torch.gt.html#torch.gt",
+      "https://docs.pytorch.org/docs/2.5/generated/torch.index_add.html#torch-index-add",
+      "https://docs.pytorch.org/docs/2.5/generated/torch.permute.html#torch-permute",
+      "https://docs.pytorch.org/docs/2.5/generated/torch.square.html#torch-square",
+      "https://docs.pytorch.org/docs/2.5/generated/torch.sum.html#torch.sum"
+    ]
+  },
+  {
+    "fileName": "算子挑战赛年度冠军赛【基础性能命题】赛题_01.xlsx",
+    "inputPath": "D:\\29722\\Desktop\\GCC\\提交相关材料\\S9全量资料审计与网页仓库归档_20260725\\04_往届赛题与代码分析\\赛题工作簿\\算子挑战赛年度冠军赛【基础性能命题】赛题_01.xlsx",
+    "inspectionFile": "D:\\29722\\Desktop\\GCC\\提交相关材料\\S9全量资料审计与网页仓库归档_20260725\\04_往届赛题与代码分析\\工作簿审读结果\\算子挑战赛年度冠军赛【基础性能命题】赛题_01.ndjson",
+    "urls": [
+      "https://docs.pytorch.org/docs/2.1/generated/torch.linspace.html#torch-linspace",
+      "https://docs.pytorch.org/docs/2.1/generated/torch.nonzero.html#torch-nonzero",
+      "https://docs.pytorch.org/docs/2.1/generated/torch.trunc.html"
+    ]
+  },
+  {
+    "fileName": "算子挑战赛年度冠军赛【挑战性能命题】赛题_01.xlsx",
+    "inputPath": "D:\\29722\\Desktop\\GCC\\提交相关材料\\S9全量资料审计与网页仓库归档_20260725\\04_往届赛题与代码分析\\赛题工作簿\\算子挑战赛年度冠军赛【挑战性能命题】赛题_01.xlsx",
+    "inspectionFile": "D:\\29722\\Desktop\\GCC\\提交相关材料\\S9全量资料审计与网页仓库归档_20260725\\04_往届赛题与代码分析\\工作簿审读结果\\算子挑战赛年度冠军赛【挑战性能命题】赛题_01.ndjson",
+    "urls": [
+      "https://docs.pytorch.org/docs/2.1/generated/torch.gcd.html#torch.gcd"
+    ]
+  }
+]

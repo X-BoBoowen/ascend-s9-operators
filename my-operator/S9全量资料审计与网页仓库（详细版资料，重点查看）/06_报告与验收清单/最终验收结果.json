@@ -1,0 +1,14 @@
+{
+  "UniqueLinks": 167,
+  "PageArchived": 97,
+  "PageFailed": 70,
+  "RepositoriesCloned": 43,
+  "RepositoriesFailed": 70,
+  "RepositoryIntegrityPass": 43,
+  "RepositoryIntegrityFail": 0,
+  "ManifestFiles": 5714,
+  "SensitivePemFilesIncluded": 0,
+  "MainReportPdfExists": true,
+  "MainReportDocxExists": true,
+  "AuditWorkbookExists": true
+}

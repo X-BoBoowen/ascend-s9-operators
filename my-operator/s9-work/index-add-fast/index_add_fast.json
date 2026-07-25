@@ -1,0 +1,34 @@
+[
+  {
+    "op": "IndexAddFast",
+    "language": "cpp",
+    "input_desc": [
+      {
+        "name": "self",
+        "param_type": "required",
+        "format": ["ND"],
+        "type": ["int8"]
+      },
+      {
+        "name": "index",
+        "param_type": "required",
+        "format": ["ND"],
+        "type": ["int32"]
+      },
+      {
+        "name": "source",
+        "param_type": "required",
+        "format": ["ND"],
+        "type": ["int8"]
+      }
+    ],
+    "output_desc": [
+      {
+        "name": "out",
+        "param_type": "required",
+        "format": ["ND"],
+        "type": ["int8"]
+      }
+    ]
+  }
+]

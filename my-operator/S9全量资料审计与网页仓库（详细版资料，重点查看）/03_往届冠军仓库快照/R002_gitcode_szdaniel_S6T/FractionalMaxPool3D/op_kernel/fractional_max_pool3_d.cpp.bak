@@ -1,0 +1,488 @@
+#include "kernel_operator.h"
+
+using namespace AscendC;
+
+// always broad cast y
+#define BUFFER_NUM 2
+#define MIN(x, y) ((x) < (y) ? (x) : (y))
+#define ROUND_UP(a, b) (((a) + (b) - 1) / (b) * (b))
+#define ROUND_DOWN(a, b) ((a) / (b) * (b))
+#define ELE2BLOCK(x) ((x * sizeof(T) + 31) / 32)
+
+
+template <typename dataType, uint32_t tileKey> class KernelFractionalMaxPool3D;
+
+template <typename T> class KernelFractionalMaxPool3D<T, 0> {
+public:
+    __aicore__ inline KernelFractionalMaxPool3D() {}
+
+    __aicore__ inline void Init(GM_ADDR input, GM_ADDR random_sample, GM_ADDR out, GM_ADDR indices,
+                                FractionalMaxPool3DTilingData tiling)
+    {
+        this->tStep = tiling.tStep;
+        this->hStep = tiling.hStep;
+        this->wStep = tiling.wStep;
+
+        this->inputT = tiling.inputT;
+        this->outputT = tiling.outputT;
+        this->poolSizeT = tiling.poolSizeT;
+
+        this->inputH = tiling.inputH;
+        this->outputH = tiling.outputH;
+        this->poolSizeH = tiling.poolSizeH;
+
+        this->inputW = tiling.inputW;
+        this->outputW = tiling.outputW;
+        this->poolSizeW = tiling.poolSizeW;
+
+        int maxLength = tStep * hStep * ROUND_UP(wStep, 32 / sizeof(T));
+
+        this->inBlockSize = inputT * inputH * inputW;
+        this->outBlockSize = outputT * outputH * outputW;
+
+        if (GetBlockIdx() < tiling.formerNum) {
+            this->block_length = tiling.formerLength;
+
+            inputGm.SetGlobalBuffer((__gm__ T *)input + tiling.formerLength * GetBlockIdx() * inBlockSize,
+                                    tiling.formerLength * inBlockSize);
+            randomSampleGm.SetGlobalBuffer((__gm__ T *)random_sample + tiling.formerLength * GetBlockIdx() * 3,
+                                           tiling.formerLength * 3);
+            outGm.SetGlobalBuffer((__gm__ T *)out + tiling.formerLength * GetBlockIdx() * outBlockSize,
+                                  tiling.formerLength * outBlockSize);
+            indicesGm.SetGlobalBuffer((__gm__ T *)indices + tiling.formerLength * GetBlockIdx() * outBlockSize,
+                                      tiling.formerLength * outBlockSize);
+        } else {
+            this->block_length = tiling.tailLength;
+
+            inputGm.SetGlobalBuffer((__gm__ T *)input + (tiling.formerLength * tiling.formerNum +
+                                                         tiling.tailLength * (GetBlockIdx() - tiling.formerNum)) *
+                                                            inBlockSize,
+                                    tiling.tailLength * inBlockSize);
+            randomSampleGm.SetGlobalBuffer(
+                (__gm__ T *)random_sample +
+                    (tiling.formerLength * tiling.formerNum + tiling.tailLength * (GetBlockIdx() - tiling.formerNum)) *
+                        3,
+                tiling.tailLength * 3);
+            outGm.SetGlobalBuffer((__gm__ T *)out + (tiling.formerLength * tiling.formerNum +
+                                                     tiling.tailLength * (GetBlockIdx() - tiling.formerNum)) *
+                                                        outBlockSize,
+                                  tiling.tailLength * outBlockSize);
+            indicesGm.SetGlobalBuffer((__gm__ T *)indices + (tiling.formerLength * tiling.formerNum +
+                                                             tiling.tailLength * (GetBlockIdx() - tiling.formerNum)) *
+                                                                outBlockSize,
+                                      tiling.tailLength * outBlockSize);
+        }
+
+        pipe.InitBuffer(inputQueue, BUFFER_NUM, maxLength * sizeof(T));
+        pipe.InitBuffer(randomSampleQueue, BUFFER_NUM, 3 * sizeof(T));
+        pipe.InitBuffer(outQueue, BUFFER_NUM, maxLength * sizeof(T));
+        pipe.InitBuffer(indicesQueue, BUFFER_NUM, maxLength * sizeof(int32_t));
+
+        pipe.InitBuffer(tBuf[0], maxLength * sizeof(float));
+        pipe.InitBuffer(tBuf[1], maxLength * sizeof(float));
+        pipe.InitBuffer(tBuf[2], maxLength * sizeof(float));
+        pipe.InitBuffer(mBuf[0], maxLength * sizeof(uint8_t));
+        pipe.InitBuffer(mBuf[1], maxLength * sizeof(uint8_t));
+        pipe.InitBuffer(mBuf[2], maxLength * sizeof(uint8_t));
+        pipe.InitBuffer(idxBuf[0], maxLength * sizeof(int));
+        pipe.InitBuffer(idxBuf[1], maxLength * sizeof(int));
+        pipe.InitBuffer(idxBuf[2], maxLength * sizeof(int));
+    }
+
+    __aicore__ inline void CopyInX(int64_t offset, int tstart, int hstart, int wstart, int tLen, int hLen, int wLen)
+    {
+        LocalTensor<T> x = inputQueue.AllocTensor<T>();
+
+        SliceInfo srcSliceInfo[3];
+        srcSliceInfo[0].startIndex = wstart;
+        srcSliceInfo[0].endIndex = wstart + wLen - 1;
+        srcSliceInfo[0].stride = 0;
+        srcSliceInfo[0].burstLen = ELE2BLOCK(wLen);
+        srcSliceInfo[0].shapeValue = inputW;
+
+        srcSliceInfo[1].startIndex = hstart;
+        srcSliceInfo[1].endIndex = hstart + hLen - 1;
+        srcSliceInfo[1].stride = 0;
+        srcSliceInfo[1].burstLen = 1;
+        srcSliceInfo[1].shapeValue = inputH;
+
+        srcSliceInfo[2].startIndex = tstart;
+        srcSliceInfo[2].endIndex = tstart + tLen - 1;
+        srcSliceInfo[2].stride = 0;
+        srcSliceInfo[2].burstLen = 1;
+        srcSliceInfo[2].shapeValue = inputT;
+
+        SliceInfo dstSliceInfo[3];
+        dstSliceInfo[0].startIndex = 0;
+        dstSliceInfo[0].endIndex = wLen - 1;
+        dstSliceInfo[0].stride = 0;
+        dstSliceInfo[0].burstLen = ELE2BLOCK(wLen);
+        dstSliceInfo[0].shapeValue = wLen;
+
+        dstSliceInfo[1].startIndex = 0;
+        dstSliceInfo[1].endIndex = hLen - 1;
+        dstSliceInfo[1].stride = 0;
+        dstSliceInfo[1].burstLen = 1;
+        dstSliceInfo[1].shapeValue = hLen;
+
+        dstSliceInfo[2].startIndex = 0;
+        dstSliceInfo[2].endIndex = tLen - 1;
+        dstSliceInfo[2].stride = 0;
+        dstSliceInfo[2].burstLen = 1;
+        dstSliceInfo[2].shapeValue = tLen;
+
+        DataCopy(x, inputGm[offset], dstSliceInfo, srcSliceInfo, 3);
+        inputQueue.EnQue(x);
+    }
+
+    __aicore__ inline void CopyInR(int64_t offset, int len)
+    {
+        LocalTensor<T> r = randomSampleQueue.AllocTensor<T>();
+        DataCopyExtParams copyParams = {1, (uint32_t)(len * sizeof(T)), 0, 0, 0};
+        DataCopyPadExtParams<T> padParams{false, 0, 0, 0};
+        DataCopyPad(r, randomSampleGm[offset], copyParams, padParams);
+        randomSampleQueue.EnQue(r);
+    }
+
+    __aicore__ inline void CopyOutZ(uint32_t offset, int tstart, int hstart, int wstart, int tLen, int hLen, int wLen)
+    {
+        LocalTensor<T> z = outQueue.DeQue<T>();
+        SliceInfo srcSliceInfo[3];
+        srcSliceInfo[0].startIndex = 0;
+        srcSliceInfo[0].endIndex = wLen - 1;
+        srcSliceInfo[0].stride = 0;
+        srcSliceInfo[0].burstLen = ELE2BLOCK(wLen);
+        srcSliceInfo[0].shapeValue = wLen;
+
+        srcSliceInfo[1].startIndex = 0;
+        srcSliceInfo[1].endIndex = hLen - 1;
+        srcSliceInfo[1].stride = 0;
+        srcSliceInfo[1].burstLen = 1;
+        srcSliceInfo[1].shapeValue = hLen;
+
+        srcSliceInfo[2].startIndex = 0;
+        srcSliceInfo[2].endIndex = tLen - 1;
+        srcSliceInfo[2].stride = 0;
+        srcSliceInfo[2].burstLen = 1;
+        srcSliceInfo[2].shapeValue = tLen;
+
+        SliceInfo dstSliceInfo[3];
+        dstSliceInfo[0].startIndex = wstart;
+        dstSliceInfo[0].endIndex = wstart + wLen - 1;
+        dstSliceInfo[0].stride = 0;
+        dstSliceInfo[0].burstLen = ELE2BLOCK(wLen);
+        dstSliceInfo[0].shapeValue = outputW;
+
+        dstSliceInfo[1].startIndex = hstart;
+        dstSliceInfo[1].endIndex = hstart + hLen - 1;
+        dstSliceInfo[1].stride = 0;
+        dstSliceInfo[1].burstLen = 1;
+        dstSliceInfo[1].shapeValue = outputH;
+
+        dstSliceInfo[2].startIndex = tstart;
+        dstSliceInfo[2].endIndex = tstart + tLen - 1;
+        dstSliceInfo[2].stride = 0;
+        dstSliceInfo[2].burstLen = 1;
+        dstSliceInfo[2].shapeValue = outputT;
+
+        DataCopy(outGm[offset], z, dstSliceInfo, srcSliceInfo, 3);
+
+        outQueue.FreeTensor(z);
+    }
+
+    __aicore__ inline void CopyOutIndices(uint32_t offset, int tstart, int hstart, int wstart, int tLen, int hLen,
+                                          int wLen)
+    {
+        LocalTensor<T> indices = indicesQueue.DeQue<T>();
+        SliceInfo srcSliceInfo[3];
+        srcSliceInfo[0].startIndex = 0;
+        srcSliceInfo[0].endIndex = wLen - 1;
+        srcSliceInfo[0].stride = 0;
+        srcSliceInfo[0].burstLen = ELE2BLOCK(wLen);
+        srcSliceInfo[0].shapeValue = wLen;
+
+        srcSliceInfo[1].startIndex = 0;
+        srcSliceInfo[1].endIndex = hLen - 1;
+        srcSliceInfo[1].stride = 0;
+        srcSliceInfo[1].burstLen = 1;
+        srcSliceInfo[1].shapeValue = hLen;
+
+        srcSliceInfo[2].startIndex = 0;
+        srcSliceInfo[2].endIndex = tLen - 1;
+        srcSliceInfo[2].stride = 0;
+        srcSliceInfo[2].burstLen = 1;
+        srcSliceInfo[2].shapeValue = tLen;
+
+        SliceInfo dstSliceInfo[3];
+        dstSliceInfo[0].startIndex = wstart;
+        dstSliceInfo[0].endIndex = wstart + wLen - 1;
+        dstSliceInfo[0].stride = 0;
+        dstSliceInfo[0].burstLen = ELE2BLOCK(wLen);
+        dstSliceInfo[0].shapeValue = outputW;
+
+        dstSliceInfo[1].startIndex = hstart;
+        dstSliceInfo[1].endIndex = hstart + hLen - 1;
+        dstSliceInfo[1].stride = 0;
+        dstSliceInfo[1].burstLen = 1;
+        dstSliceInfo[1].shapeValue = outputH;
+
+        dstSliceInfo[2].startIndex = tstart;
+        dstSliceInfo[2].endIndex = tstart + tLen - 1;
+        dstSliceInfo[2].stride = 0;
+        dstSliceInfo[2].burstLen = 1;
+        dstSliceInfo[2].shapeValue = outputT;
+
+        DataCopy(indicesGm[offset], indices, dstSliceInfo, srcSliceInfo, 3);
+        indicesQueue.FreeTensor(indices);
+    }
+
+    __aicore__ inline void generate_intervals(LocalTensor<int32_t> &sequence, float randomSample, int inputSize,
+                                              int outputSize, int poolSize)
+    {
+        if (outputSize > 1) {
+            float alpha =
+                static_cast<float>(inputSize - poolSize) / static_cast<float>(outputSize - 1); // TODO:use float now
+
+            for (int i = 0; i < outputSize - 1; i++) {
+                sequence(i) = static_cast<int>((i + randomSample) * alpha) - static_cast<int>(randomSample * alpha);
+            }
+        }
+        if (outputSize > 0) {
+            sequence(outputSize - 1) = inputSize - poolSize;
+        }
+    }
+
+    __aicore__ inline void ComputeSeq()
+    {
+        // scalar_t *randomSamplesForPlane = randomSamples + plane * 3;
+        AscendC::LocalTensor<T> randomLocal = randomSampleQueue.DeQue<T>();
+
+        // printf("random %f, %f, %f\n", (float)randomLocal(0),(float)randomLocal(1),(float)randomLocal(2));
+
+        /* Generate interval sequence */
+        LocalTensor<int32_t> sequenceT = tBuf[0].Get<int32_t>();
+        LocalTensor<int32_t> sequenceH = tBuf[1].Get<int32_t>();
+        LocalTensor<int32_t> sequenceW = tBuf[2].Get<int32_t>();
+
+        float r[3];
+        r[0] = (float)randomLocal(0);
+        r[1] = (float)randomLocal(1);
+        r[2] = (float)randomLocal(2);
+
+        generate_intervals(sequenceT, r[0], inputT, outputT, poolSizeT);
+        generate_intervals(sequenceH, r[1], inputH, outputH, poolSizeH);
+        generate_intervals(sequenceW, r[2], inputW, outputW, poolSizeW);
+
+        DumpTensor(sequenceT, 0, 32);
+        DumpTensor(sequenceH, 1, 32);
+        DumpTensor(sequenceW, 2, 32);
+
+        randomSampleQueue.FreeTensor(randomLocal);
+    }
+
+    // __aicore__ inline void MyMemCopy(T *dst, T *src, int len)
+    // {
+    //     for (int i = 0; i < len; i++) {
+    //         dst[i] = src[i];
+    //     }
+    // }
+
+
+    __aicore__ inline void Copy3DRoi(const LocalTensor<T> &src, LocalTensor<T> &dst, int tstart, int hstart, int wstart,
+                                     int tLen, int hLen, int wLen, int dWstride, int sTstride, int sHstride,
+                                     int sWstride)
+    {
+        for (int t = 0; t < tLen; ++t) {
+            for (int h = 0; h < hLen; ++h) {
+                for (int w = 0; w < wLen; ++w) {
+                    dst(t * hLen * dWstride + h * dWstride + w) =
+                        src((t + tstart) * sHstride * sWstride + (h + hstart) * sWstride + (w + wstart) * sWstride);
+                }
+            }
+        }
+    }
+
+    __aicore__ inline void Compute(int inputTStart, int inputHStart, int inputWStart, int curTout, int curHout,
+                                   int curWout, int sTstride, int sHstride, int sWstride)
+    {
+        AscendC::LocalTensor<T> inLocal = inputQueue.DeQue<T>();
+        AscendC::LocalTensor<T> outLocal = outQueue.AllocTensor<T>();
+        AscendC::LocalTensor<int32_t> idxLocal = indicesQueue.AllocTensor<int32_t>();
+
+        LocalTensor<T> gatherLocal = outQueue.AllocTensor<T>();
+        LocalTensor<uint8_t> mask_1s = mBuf[0].Get<uint8_t>();
+        LocalTensor<uint8_t> mask_sel = mBuf[1].Get<uint8_t>();
+        LocalTensor<int32_t> vecCurIdx = mBuf[2].Get<int32_t>();
+
+        AscendC::LocalTensor<int32_t> idxT = idxBuf[0].Get<int32_t>();
+        AscendC::LocalTensor<int32_t> idxH = idxBuf[1].Get<int32_t>();
+        AscendC::LocalTensor<int32_t> idxW = idxBuf[2].Get<int32_t>();
+
+
+        T maxVal = -60000; // TODO: -std::numeric_limits<T>::infinity();
+        uint32_t w_stride = ROUND_UP(curWout, 32 / sizeof(T));
+        int len = curTout * curHout * w_stride;
+        Duplicate(outLocal, maxVal, len);
+        // Duplicate(mask_1s, 0, len);// not support u8
+
+#if 0
+        for (int t2 = 0; t2 < poolSizeT; ++t2) {
+            for (int h2 = 0; h2 < poolSizeH; ++h2) {
+                for (int w2 = 0; w2 < poolSizeW; ++w2) {
+                    Copy3DRoi(inLocal, gatherLocal, t2, h2, w2, curTout, curHout, curWout, w_stride, sTstride, sHstride,
+                              sWstride);
+                    Max(gatherLocal, maxVal, len);
+                    Compare(mask, maxVal, gatherLocal, AscendC::CMPMODE::EQ, srcDataSize);
+                    Select(idxLocal, mask, gatherLocal);
+                    int cur_idx = t2 * poolSizeH * poolSizeW + h2 * poolSizeW + w2;
+                    Select(idxLocal, mask_sel, src0Local, vecCurIdx, cur_idx, AscendC::SELMODE::VSEL_CMPMASK_SPR,
+                           dataSize);
+                }
+            }
+        }
+#endif
+
+#if 0
+        for (int t = 0; t < curTout; ++t) {
+            for (int h = 0; h < curHout; ++h) {
+                for (int w = 0; w < curWout; ++w) {
+                    //
+                    maxVal = -60000;//TODO://-std::numeric_limits<T>::infinity();
+                    int curIdx = t * curHout * w_stride + h * curWout + w;
+                    idxT(curIdx) = t + inputTStart;
+                    idxH(curIdx) = h + inputHStart;
+                    idxW(curIdx) = w + inputWStart;
+
+                    for (int t2 = 0; t2 < poolSizeT; ++t2) {
+                        for (int h2 = 0; h2 < poolSizeH; ++h2) {
+                            for (int w2 = 0; w2 < poolSizeW; ++w2) {
+                                T val =
+                                    inLocal((t + t2) * sHstride * sWstride + (h + h2) * sWstride + (w + w2) * sWstride);
+                                if ((float)val > (float)maxVal) {
+                                    maxVal = val;
+                                    idxT(curIdx) = t + t2 + inputTStart;
+                                    idxH(curIdx) = h + h2 + inputHStart;
+                                    idxW(curIdx) = w + w2 + inputWStart;
+                                }
+                                outLocal(curIdx) = maxVal;
+                            }
+                        }
+                    }
+                    //
+                }
+            }
+        }
+        // idxLocal = idxT * inputH * inputW + idxH * inputW + idxW;
+        Muls(idxLocal, idxT, inputH * inputW, len);
+        Axpy(idxLocal, idxH, inputW, len);
+        Add(idxLocal, idxLocal, idxW, len);
+#endif
+
+        // outputForPlane[t * outputH * outputW + h * outputW + w] = maxVal;
+        // indicesForPlane[t * outputH * outputW + h * outputW + w] = maxIndex;
+
+
+        inputQueue.FreeTensor(inLocal);
+        outQueue.EnQue(outLocal);
+        indicesQueue.EnQue(idxLocal);
+    }
+
+    __aicore__ inline void Process3D(int block_id)
+    {
+        LocalTensor<int32_t> sequenceT = tBuf[0].Get<int32_t>();
+        LocalTensor<int32_t> sequenceH = tBuf[1].Get<int32_t>();
+        LocalTensor<int32_t> sequenceW = tBuf[2].Get<int32_t>();
+        // LocalTensor<T> vMax = vMax.Get<T>();
+
+        for (int t = 0; t < outputT; t += tStep) {
+            int32_t inputTStart = sequenceT(t);
+            int32_t inputTEnd = MIN(sequenceT(MIN(t + tStep, outputT - 1)) + poolSizeT, inputT);
+            int32_t curTout = MIN(tStep, outputT - t);
+            int32_t curTin = inputTEnd - inputTStart;
+
+            for (int h = 0; h < outputH; h += hStep) {
+                int32_t inputHStart = sequenceH(h);
+                int32_t inputHEnd = MIN(sequenceH(MIN(h + hStep, outputH - 1)) + poolSizeH, inputH);
+                int32_t curHout = MIN(hStep, outputH - h);
+                int32_t curHin = inputHEnd - inputHStart;
+
+                for (int w = 0; w < outputW; w += wStep) {
+                    int32_t inputWStart = sequenceW(w);
+                    int32_t inputWEnd = MIN(sequenceW(MIN(w + wStep, outputW - 1)) + poolSizeW, inputW);
+                    int32_t curWout = MIN(wStep, outputW - w);
+                    int32_t curWin = inputWEnd - inputWStart;
+
+                    printf("t: %d, h: %d, w: %d\n", t, h, w);
+                    printf("curTout: %d, curHout: %d, curWout: %d\n", curTout, curHout, curWout);
+                    printf("inputTStart: %d, inputHStart: %d, inputWStart: %d\n", inputTStart, inputHStart,
+                           inputWStart);
+                    printf("inputTEnd: %d, inputHEnd: %d, inputWEnd: %d\n", inputTEnd, inputHEnd, inputWEnd);
+                    printf("curTin: %d, curHin: %d, curWin: %d\n", curTin, curHin, curWin);
+
+                    CopyInX(block_id * inBlockSize, inputTStart, inputHStart, inputWStart, curTin, curHin, curWin);
+                    Compute(inputTStart, inputHStart, inputWStart, curTout, curHout, curWout, curTin, curHin,
+                            curWin); // TODO:
+                    CopyOutZ(block_id * outBlockSize, t, h, w, curTout, curHout, curWout);
+                    CopyOutIndices(block_id * outBlockSize, t, h, w, curTout, curHout, curWout);
+                }
+            }
+        }
+    }
+    __aicore__ inline void Process()
+    {
+        for (int i = 0; i < block_length; i++) {
+            CopyInR(i * 3, 3);
+            ComputeSeq();
+            Process3D(i);
+        }
+    }
+
+private:
+    TPipe pipe;
+
+    TQue<QuePosition::VECIN, BUFFER_NUM> inputQueue;
+    TQue<QuePosition::VECIN, BUFFER_NUM> randomSampleQueue;
+    TQue<QuePosition::VECOUT, BUFFER_NUM> outQueue;
+    TQue<QuePosition::VECOUT, BUFFER_NUM> indicesQueue;
+
+    TBuf<TPosition::VECCALC> tBuf[3];
+    TBuf<TPosition::VECCALC> mBuf[3];
+    TBuf<TPosition::VECCALC> idxBuf[3];
+    // TBuf<TPosition::VECCALC> vMax;
+
+    GlobalTensor<T> inputGm;
+    GlobalTensor<T> randomSampleGm;
+    GlobalTensor<T> outGm;
+    GlobalTensor<T> indicesGm;
+
+    // int tileLength;
+    // int tileNum;
+    // int lastTileLength;
+
+    int inBlockSize;
+    int outBlockSize;
+    int block_length;
+
+    int inputT, outputT, poolSizeT;
+    int inputH, outputH, poolSizeH;
+    int inputW, outputW, poolSizeW;
+
+    int tStep, hStep, wStep;
+};
+
+extern "C" __global__ __aicore__ void fractional_max_pool3_d(GM_ADDR input, GM_ADDR random_sample, GM_ADDR out,
+                                                             GM_ADDR indices, GM_ADDR workspace, GM_ADDR tiling)
+{
+    GET_TILING_DATA(tiling_data, tiling);
+    // TODO: user kernel impl
+
+    if (TILING_KEY_IS(0)) {
+        if constexpr (std::is_same_v<DTYPE_INPUT, half>) {
+            KernelFractionalMaxPool3D<DTYPE_INPUT, 0> op;
+            op.Init(input, random_sample, out, indices, tiling_data);
+            op.Process();
+        } else {
+        }
+    } else if (TILING_KEY_IS(1)) {
+    }
+}

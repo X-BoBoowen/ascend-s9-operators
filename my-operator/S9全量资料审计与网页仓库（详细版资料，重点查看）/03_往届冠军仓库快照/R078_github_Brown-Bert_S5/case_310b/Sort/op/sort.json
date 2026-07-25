@@ -1,0 +1,99 @@
+[
+    {
+        "op": "Sort",
+        "language":"cpp",
+        "input_desc": [
+            {
+                "name": "input",
+                "param_type": "required",
+                "format": [
+                    "ND",
+                    "ND",
+                    "ND",
+                    "ND",
+                    "ND",
+                    "ND",
+                    "ND"
+                ],
+                "type": [
+                    "fp16",
+                    "fp32",
+                    "bf16",
+                    "int8",
+                    "uint8",
+                    "int32",
+                    "int64"
+                ]
+            }
+        ],
+        "attr":[
+            {
+                "name":"axis",
+                "param_type":"optional",
+                "type":"int",
+                "default_value":"-1"
+            },
+            {
+                "name":"descending",
+                "param_type":"optional",
+                "type":"bool",
+                "default_value":"false"
+            },
+            {
+                "name":"stable",
+                "param_type":"optional",
+                "type":"bool",
+                "default_value":"false"
+            }
+        ],
+        "output_desc": [
+            {
+                "name": "y1",
+                "param_type": "required",
+                "format": [
+                    "ND",
+                    "ND",
+                    "ND",
+                    "ND",
+                    "ND",
+                    "ND",
+                    "ND"
+                ],
+                "type": [
+                    "fp16",
+                    "fp32",
+                    "bf16",
+                    "int8",
+                    "uint8",
+                    "int32",
+                    "int64"
+                ]
+            },
+            {
+                "name": "y2",
+                "param_type": "required",
+                "format": [
+                    "ND",
+                    "ND",
+                    "ND",
+                    "ND",
+                    "ND",
+                    "ND",
+                    "ND"
+                ],
+                "type": [
+                    "int32",
+                    "int32",
+                    "int32",
+                    "int32",
+                    "int32",
+                    "int32",
+                    "int32"
+                ]
+            }
+        ]
+    }
+]
+
+
+

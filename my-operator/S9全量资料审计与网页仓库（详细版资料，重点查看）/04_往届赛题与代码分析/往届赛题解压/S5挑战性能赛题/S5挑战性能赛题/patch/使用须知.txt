@@ -1,0 +1,12 @@
+
+该补丁用以解决使用高阶API MatMul时，出现命名冲突的错误问题，不涉及可以忽略
+注意：
+     该补丁基于cann-8.1.rc1版本做修改，其他cann版本不建议使用。
+改动点:
+     将几处UPPER、LOWER、UNDEF修改命名为TRIANUPPER、TRIANLOWER、TRIANUNDEF
+改动方式:
+     可以直接将目录中修改后的8个文件copy到指定位置，
+
+执行方法：
+1.打开patch.sh脚本，确认cann_path路径是否正确
+2.bash patch.sh

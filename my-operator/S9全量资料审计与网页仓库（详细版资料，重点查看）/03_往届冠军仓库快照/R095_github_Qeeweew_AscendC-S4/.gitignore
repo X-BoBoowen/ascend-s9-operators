@@ -1,0 +1,6 @@
+.vscode
+build_out/
+cmake/
+**/.ipynb_checkpoints/
+
+.aider*

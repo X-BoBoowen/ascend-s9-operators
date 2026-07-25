@@ -1,0 +1,91 @@
+[
+    {
+        "op": "GatherV3",
+        "language":"cpp",
+        "input_desc": [
+            {
+                "name": "x",
+                "param_type": "required",
+                "format": [
+                    "ND",
+                    "ND",
+                    "ND",
+                    "ND"
+                ],
+                "type": [
+                    "fp16",
+                    "fp32",
+                    "int32",
+                    "int8"
+                ]
+            },
+            {
+                "name": "indices",
+                "param_type": "required",
+                "format": [
+                    "ND",
+                    "ND",
+                    "ND",
+                    "ND"
+                ],
+                "type": [
+                    "int32",
+                    "int32",
+                    "int32",
+                    "int32"
+                ]
+            },
+            {
+                "name": "axis",
+                "param_type": "required",
+                "format": [
+                    "ND",
+                    "ND",
+                    "ND",
+                    "ND"
+                ],
+                "type": [
+                    "int32",
+                    "int32",
+                    "int32",
+                    "int32"
+                ]
+            }
+        ],
+        "attr":[
+            {
+                "name":"batch_dims",
+                "param_type":"optional",
+                "type":"int",
+                "default_value":"0"
+            },
+            {
+                "name":"negative_index_support",
+                "param_type":"optional",
+                "type":"bool",
+                "default_value":"false"
+            }
+        ],
+        "output_desc": [
+            {
+                "name": "out",
+                "param_type": "required",
+                "format": [
+                    "ND",
+                    "ND",
+                    "ND",
+                    "ND"
+                ],
+                "type": [
+                    "fp16",
+                    "fp32",
+                    "int32",
+                    "int8"
+                ]
+            }
+        ]
+    }
+]
+
+
+
