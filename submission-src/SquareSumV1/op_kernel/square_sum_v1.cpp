@@ -127,15 +127,14 @@ private:
             1,
             1,
             static_cast<int32_t>(paddedReduce_ / 8U));
-        // Keep the reduce result on the Vector path: fp32 -> fp16 cast
-        // avoids scalar GetValue/SetValue plus V_S / S_MTE3 round-trips.
-        // count uses 8-aligned length so the cast matches sumFloat storage.
-        const uint32_t castCount = (currentRows + 7U) / 8U * 8U;
+        // Vector fp32→fp16 cast replaces the old V_S / S_MTE3 scalar
+        // copy.  Cast only the rows that WholeReduceSum actually wrote
+        // (sumFloat beyond currentRows is uninitialised).
         AscendC::Cast(
             yLocal,
             sumFloat,
             AscendC::RoundMode::CAST_RINT,
-            castCount);
+            static_cast<int32_t>(currentRows));
 
         yQueue_.EnQue(yLocal);
         xQueue_.FreeTensor(xHalf);
