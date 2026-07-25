@@ -48,3 +48,7 @@ Thumbs.db
 /submission-docx-xml/
 /xlsx-inspect/
 /transpose-fast/
+
+# Local agent/session notes (not for remote)
+.pi-subagents/
+docs/
