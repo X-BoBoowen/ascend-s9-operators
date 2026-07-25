@@ -127,23 +127,15 @@ private:
             1,
             1,
             static_cast<int32_t>(paddedReduce_ / 8U));
-        const AscendC::TEventID eventIdVToS =
-            pipe_.FetchEventID(AscendC::HardEvent::V_S);
-        AscendC::SetFlag<AscendC::HardEvent::V_S>(
-            eventIdVToS);
-        AscendC::WaitFlag<AscendC::HardEvent::V_S>(
-            eventIdVToS);
-        for (uint32_t row = 0; row < currentRows; ++row) {
-            yLocal.SetValue(
-                row,
-                static_cast<half>(sumFloat.GetValue(row)));
-        }
-        const AscendC::TEventID eventIdSToMte3 =
-            pipe_.FetchEventID(AscendC::HardEvent::S_MTE3);
-        AscendC::SetFlag<AscendC::HardEvent::S_MTE3>(
-            eventIdSToMte3);
-        AscendC::WaitFlag<AscendC::HardEvent::S_MTE3>(
-            eventIdSToMte3);
+        // Keep the reduce result on the Vector path: fp32 -> fp16 cast
+        // avoids scalar GetValue/SetValue plus V_S / S_MTE3 round-trips.
+        // count uses 8-aligned length so the cast matches sumFloat storage.
+        const uint32_t castCount = (currentRows + 7U) / 8U * 8U;
+        AscendC::Cast(
+            yLocal,
+            sumFloat,
+            AscendC::RoundMode::CAST_RINT,
+            castCount);
 
         yQueue_.EnQue(yLocal);
         xQueue_.FreeTensor(xHalf);
