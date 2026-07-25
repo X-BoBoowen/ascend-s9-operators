@@ -1,6 +1,6 @@
 #include "kernel_operator.h"
 
-constexpr uint32_t BUFFER_NUM = 1;
+constexpr uint32_t BUFFER_NUM = 2;
 
 class KernelSquareSumV1 {
 public:
@@ -14,18 +14,22 @@ public:
         uint32_t paddedReduce,
         uint32_t baseRowsPerBlock,
         uint32_t extraBlocks,
+        uint32_t tileRows,
         uint32_t blockIdx)
     {
         outer_ = outer;
         reduceLen_ = reduceLen;
         paddedReduce_ = paddedReduce;
+        tileRows_ = tileRows == 0U ? 1U : tileRows;
         rows_ = baseRowsPerBlock + (blockIdx < extraBlocks ? 1U : 0U);
         firstRow_ =
             blockIdx * baseRowsPerBlock +
             (blockIdx < extraBlocks ? blockIdx : extraBlocks);
-        const uint32_t inputCount = rows_ * paddedReduce_;
-        const uint32_t outputStorage = (rows_ + 15U) / 16U * 16U;
-        const uint32_t sumStorage = (rows_ + 7U) / 8U * 8U;
+
+        // Buffers are sized by micro-tile, not the full per-core row span.
+        const uint32_t inputCount = tileRows_ * paddedReduce_;
+        const uint32_t outputStorage = (tileRows_ + 15U) / 16U * 16U;
+        const uint32_t sumStorage = (tileRows_ + 7U) / 8U * 8U;
 
         xGm_.SetGlobalBuffer(
             reinterpret_cast<__gm__ half*>(x), outer_ * reduceLen_);
@@ -43,18 +47,42 @@ public:
 
     __aicore__ inline void Process()
     {
-        CopyIn();
-        Compute();
-        CopyOut();
+        if (rows_ == 0U) {
+            return;
+        }
+
+        // Double-buffer pipeline:
+        //   prefetch tile0
+        //   for each tile: prefetch next | compute current | copy-out current
+        const uint32_t firstRows =
+            (rows_ < tileRows_) ? rows_ : tileRows_;
+        CopyIn(0U, firstRows);
+
+        for (uint32_t rowOffset = 0U; rowOffset < rows_; rowOffset += tileRows_) {
+            const uint32_t currentRows =
+                (rows_ - rowOffset < tileRows_)
+                    ? (rows_ - rowOffset)
+                    : tileRows_;
+            const uint32_t nextOffset = rowOffset + tileRows_;
+            if (nextOffset < rows_) {
+                const uint32_t nextRows =
+                    (rows_ - nextOffset < tileRows_)
+                        ? (rows_ - nextOffset)
+                        : tileRows_;
+                CopyIn(nextOffset, nextRows);
+            }
+            Compute(currentRows);
+            CopyOut(rowOffset, currentRows);
+        }
     }
 
 private:
-    __aicore__ inline void CopyIn()
+    __aicore__ inline void CopyIn(uint32_t rowOffset, uint32_t currentRows)
     {
         AscendC::LocalTensor<half> xLocal =
             xQueue_.AllocTensor<half>();
         AscendC::DataCopyExtParams copyParams;
-        copyParams.blockCount = static_cast<uint16_t>(rows_);
+        copyParams.blockCount = static_cast<uint16_t>(currentRows);
         copyParams.blockLen = reduceLen_ * sizeof(half);
         copyParams.srcStride = 0;
         copyParams.dstStride = 0;
@@ -67,15 +95,15 @@ private:
         padParams.paddingValue = static_cast<half>(0.0);
         AscendC::DataCopyPad(
             xLocal,
-            xGm_[firstRow_ * reduceLen_],
+            xGm_[(firstRow_ + rowOffset) * reduceLen_],
             copyParams,
             padParams);
         xQueue_.EnQue(xLocal);
     }
 
-    __aicore__ inline void Compute()
+    __aicore__ inline void Compute(uint32_t currentRows)
     {
-        const uint32_t inputCount = rows_ * paddedReduce_;
+        const uint32_t inputCount = currentRows * paddedReduce_;
         AscendC::LocalTensor<half> xHalf =
             xQueue_.DeQue<half>();
         AscendC::LocalTensor<float> xFloat =
@@ -95,7 +123,7 @@ private:
             sumFloat,
             xFloat,
             static_cast<int32_t>(reduceLen_),
-            static_cast<int32_t>(rows_),
+            static_cast<int32_t>(currentRows),
             1,
             1,
             static_cast<int32_t>(paddedReduce_ / 8U));
@@ -105,7 +133,7 @@ private:
             eventIdVToS);
         AscendC::WaitFlag<AscendC::HardEvent::V_S>(
             eventIdVToS);
-        for (uint32_t row = 0; row < rows_; ++row) {
+        for (uint32_t row = 0; row < currentRows; ++row) {
             yLocal.SetValue(
                 row,
                 static_cast<half>(sumFloat.GetValue(row)));
@@ -121,17 +149,17 @@ private:
         xQueue_.FreeTensor(xHalf);
     }
 
-    __aicore__ inline void CopyOut()
+    __aicore__ inline void CopyOut(uint32_t rowOffset, uint32_t currentRows)
     {
         AscendC::LocalTensor<half> yLocal =
             yQueue_.DeQue<half>();
         AscendC::DataCopyExtParams copyParams;
         copyParams.blockCount = 1;
-        copyParams.blockLen = rows_ * sizeof(half);
+        copyParams.blockLen = currentRows * sizeof(half);
         copyParams.srcStride = 0;
         copyParams.dstStride = 0;
         AscendC::DataCopyPad(
-            yGm_[firstRow_],
+            yGm_[firstRow_ + rowOffset],
             yLocal,
             copyParams);
         yQueue_.FreeTensor(yLocal);
@@ -148,6 +176,7 @@ private:
     uint32_t outer_;
     uint32_t reduceLen_;
     uint32_t paddedReduce_;
+    uint32_t tileRows_;
     uint32_t rows_;
     uint32_t firstRow_;
 };
@@ -168,6 +197,7 @@ extern "C" __global__ __aicore__ void square_sum_v1(
         tilingData.paddedReduce,
         tilingData.baseRowsPerBlock,
         tilingData.extraBlocks,
+        tilingData.tileRows,
         AscendC::GetBlockIdx());
     op.Process();
 }
