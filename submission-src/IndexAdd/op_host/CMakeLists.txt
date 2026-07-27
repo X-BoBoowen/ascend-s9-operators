@@ -6,7 +6,7 @@ opbuild(OPS_SRC ${ops_srcs}
 )
 
 file(GLOB group_proto_src ${ASCEND_AUTOGEN_PATH}/group_proto/*.cc)
-
+ 
 add_library(cust_op_proto SHARED
     ${group_proto_src}
     ${ops_srcs}

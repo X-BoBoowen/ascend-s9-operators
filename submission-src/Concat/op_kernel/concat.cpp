@@ -1,202 +1,182 @@
 #include "kernel_operator.h"
-#include "kernel_operator_list_tensor_intf.h"
-
-constexpr uint32_t BUFFER_NUM = 2;
+constexpr uint32_t UB_BYTES = 32 * 1024;
+constexpr uint32_t ALIGN_BYTES = 32;
+constexpr uint32_t MAX_COPY_ROWS = 4095;
 
 class KernelConcat {
 public:
     __aicore__ inline KernelConcat() {}
 
     __aicore__ inline void Init(
-        GM_ADDR x,
         GM_ADDR y,
-        uint32_t outer,
-        uint32_t outInner,
-        uint32_t inputCount,
-        uint32_t baseRowsPerBlock,
+        uint64_t outer,
+        uint64_t outRowBytes,
+        uint64_t baseRowsPerBlock,
         uint32_t extraBlocks,
-        uint32_t tileRows,
-        uint32_t maxAlignedWidth,
-        const uint32_t* widths,
-        const uint32_t* offsets,
         uint32_t blockIdx)
     {
         outer_ = outer;
-        outInner_ = outInner;
-        inputCount_ = inputCount;
-        AscendC::ListTensorDesc inputList(
-            reinterpret_cast<__gm__ void*>(x));
-        for (uint32_t i = 0; i < inputCount_; ++i) {
-            inputAddresses_[i] = reinterpret_cast<GM_ADDR>(
-                inputList.GetDataPtr<half>(i));
-        }
-        tileRows_ = tileRows;
-        maxAlignedWidth_ = maxAlignedWidth;
+        outRowBytes_ = outRowBytes;
         rows_ = baseRowsPerBlock + (blockIdx < extraBlocks ? 1U : 0U);
         firstRow_ =
             blockIdx * baseRowsPerBlock +
             (blockIdx < extraBlocks ? blockIdx : extraBlocks);
-        for (uint32_t i = 0; i < inputCount_; ++i) {
-            widths_[i] = widths[i];
-            offsets_[i] = offsets[i];
-        }
 
         yGm_.SetGlobalBuffer(
-            reinterpret_cast<__gm__ half*>(y),
-            outer_ * outInner_);
+            reinterpret_cast<__gm__ uint8_t*>(y),
+            outer_ * outRowBytes_);
         pipe_.InitBuffer(
-            inputQueue_,
-            BUFFER_NUM,
-            tileRows_ * maxAlignedWidth_ * sizeof(half));
-        pipe_.InitBuffer(
-            outputQueue_,
-            BUFFER_NUM,
-            tileRows_ * maxAlignedWidth_ * sizeof(half));
+            copyBuffer_,
+            UB_BYTES);
+        mte2ToMte3Event_ = static_cast<event_t>(
+            pipe_.FetchEventID(
+                AscendC::HardEvent::MTE2_MTE3));
+        mte3ToMte2Event_ = static_cast<event_t>(
+            pipe_.FetchEventID(
+                AscendC::HardEvent::MTE3_MTE2));
     }
 
-    __aicore__ inline void Process()
+    __aicore__ inline void CopyOne(
+        GM_ADDR inputAddress,
+        uint64_t widthBytes,
+        uint64_t outputOffsetBytes)
     {
-        for (uint32_t inputIdx = 0;
-             inputIdx < inputCount_;
-             ++inputIdx) {
-            const uint32_t width = widths_[inputIdx];
-            if (width == 0) {
-                continue;
-            }
-            AscendC::GlobalTensor<half> inputGm;
-            inputGm.SetGlobalBuffer(
-                reinterpret_cast<__gm__ half*>(
-                    inputAddresses_[inputIdx]),
-                outer_ * width);
-
-            for (uint32_t rowOffset = 0;
-                 rowOffset < rows_;
-                 rowOffset += tileRows_) {
-                const uint32_t currentRows =
-                    (rows_ - rowOffset < tileRows_)
-                        ? rows_ - rowOffset
-                        : tileRows_;
-                CopySegment(
-                    inputGm,
-                    width,
-                    offsets_[inputIdx],
-                    rowOffset,
-                    currentRows);
-            }
+        if (rows_ == 0 || widthBytes == 0) {
+            return;
         }
+
+        AscendC::GlobalTensor<uint8_t> inputGm;
+        inputGm.SetGlobalBuffer(
+            reinterpret_cast<__gm__ uint8_t*>(inputAddress),
+            outer_ * widthBytes);
+        CopyInput(inputGm, widthBytes, outputOffsetBytes);
     }
 
 private:
-    __aicore__ inline void CopySegment(
-        AscendC::GlobalTensor<half>& inputGm,
-        uint32_t width,
-        uint32_t outputOffset,
-        uint32_t rowOffset,
-        uint32_t currentRows)
+    __aicore__ inline void CopyInput(
+        AscendC::GlobalTensor<uint8_t>& inputGm,
+        uint64_t widthBytes,
+        uint64_t outputOffsetBytes)
     {
-        AscendC::LocalTensor<half> inputLocal =
-            inputQueue_.AllocTensor<half>();
+        for (uint64_t chunkOffset = 0;
+             chunkOffset < widthBytes;
+             chunkOffset += UB_BYTES) {
+            const uint32_t chunkBytes = static_cast<uint32_t>(
+                widthBytes - chunkOffset < UB_BYTES
+                    ? widthBytes - chunkOffset
+                    : UB_BYTES);
+            const uint32_t alignedChunkBytes =
+                (chunkBytes + ALIGN_BYTES - 1U) /
+                ALIGN_BYTES * ALIGN_BYTES;
+            uint32_t rowsPerCopy =
+                UB_BYTES / alignedChunkBytes;
+            rowsPerCopy = rowsPerCopy < MAX_COPY_ROWS
+                ? rowsPerCopy
+                : MAX_COPY_ROWS;
 
-        AscendC::DataCopyExtParams inputCopyParams;
-        inputCopyParams.blockCount =
-            static_cast<uint16_t>(currentRows);
-        inputCopyParams.blockLen = width * sizeof(half);
-        inputCopyParams.srcStride = 0;
-        inputCopyParams.dstStride = 0;
+            const uint64_t inputStride =
+                widthBytes - chunkBytes;
+            const uint64_t outputStride =
+                outRowBytes_ - chunkBytes;
+            if (inputStride > UINT32_MAX ||
+                outputStride > UINT32_MAX) {
+                rowsPerCopy = 1;
+            }
 
-        AscendC::DataCopyPadExtParams<half> padParams;
-        padParams.isPad = true;
-        padParams.leftPadding = 0;
-        padParams.rightPadding = static_cast<uint8_t>(
-            (width + 15U) / 16U * 16U - width);
-        padParams.paddingValue = static_cast<half>(0);
-        AscendC::DataCopyPad(
-            inputLocal,
-            inputGm[(firstRow_ + rowOffset) * width],
-            inputCopyParams,
-            padParams);
-        inputQueue_.EnQue(inputLocal);
+            for (uint64_t rowOffset = 0;
+                 rowOffset < rows_;
+                 rowOffset += rowsPerCopy) {
+                const uint32_t currentRows =
+                    static_cast<uint32_t>(
+                        rows_ - rowOffset < rowsPerCopy
+                            ? rows_ - rowOffset
+                            : rowsPerCopy);
+                AscendC::LocalTensor<uint8_t> local =
+                    copyBuffer_.Get<uint8_t>();
 
-        inputLocal = inputQueue_.DeQue<half>();
-        AscendC::LocalTensor<half> outputLocal =
-            outputQueue_.AllocTensor<half>();
-        const uint32_t alignedWidth =
-            (width + 15U) / 16U * 16U;
-        VectorCopy(
-            outputLocal,
-            inputLocal,
-            currentRows * alignedWidth);
-        outputQueue_.EnQue(outputLocal);
-        inputQueue_.FreeTensor(inputLocal);
+                AscendC::DataCopyPadExtParams<uint8_t> padParams;
+                padParams.isPad = true;
+                padParams.leftPadding = 0;
+                padParams.rightPadding = static_cast<uint8_t>(
+                    alignedChunkBytes - chunkBytes);
+                padParams.paddingValue = 0;
 
-        AscendC::DataCopyExtParams outputCopyParams;
-        outputCopyParams.blockCount =
-            static_cast<uint16_t>(currentRows);
-        outputCopyParams.blockLen = width * sizeof(half);
-        outputCopyParams.srcStride = 0;
-        outputCopyParams.dstStride =
-            (outInner_ - width) * sizeof(half);
-        outputLocal = outputQueue_.DeQue<half>();
-        AscendC::DataCopyPad(
-            yGm_[
-                (firstRow_ + rowOffset) * outInner_ +
-                outputOffset],
-            outputLocal,
-            outputCopyParams);
-        outputQueue_.FreeTensor(outputLocal);
-    }
+                AscendC::DataCopyExtParams inputCopyParams;
+                inputCopyParams.blockLen = chunkBytes;
+                inputCopyParams.dstStride = 0;
+                if (alignedChunkBytes == chunkBytes) {
+                    inputCopyParams.blockCount =
+                        static_cast<uint16_t>(currentRows);
+                    inputCopyParams.srcStride =
+                        currentRows == 1
+                            ? 0
+                            : static_cast<uint32_t>(inputStride);
+                    AscendC::DataCopyPad(
+                        local,
+                        inputGm[
+                            (firstRow_ + rowOffset) * widthBytes +
+                            chunkOffset],
+                        inputCopyParams,
+                        padParams);
+                } else {
+                    inputCopyParams.blockCount = 1;
+                    inputCopyParams.srcStride = 0;
+                    for (uint32_t row = 0;
+                         row < currentRows;
+                         ++row) {
+                        AscendC::DataCopyPad(
+                            local[row * alignedChunkBytes],
+                            inputGm[
+                                (firstRow_ + rowOffset + row) *
+                                    widthBytes +
+                                chunkOffset],
+                            inputCopyParams,
+                            padParams);
+                    }
+                }
+                AscendC::SetFlag<
+                    AscendC::HardEvent::MTE2_MTE3>(
+                        mte2ToMte3Event_);
+                AscendC::WaitFlag<
+                    AscendC::HardEvent::MTE2_MTE3>(
+                        mte2ToMte3Event_);
 
-    __aicore__ inline void VectorCopy(
-        const AscendC::LocalTensor<half>& dst,
-        const AscendC::LocalTensor<half>& src,
-        uint32_t count)
-    {
-        constexpr uint32_t ELEMENTS_PER_REPEAT = 128;
-        constexpr uint32_t MAX_REPEATS = 255;
-        AscendC::CopyRepeatParams repeatParams(1, 1, 8, 8);
-        uint32_t offset = 0;
-        while (count - offset >= ELEMENTS_PER_REPEAT) {
-            const uint32_t remainingRepeats =
-                (count - offset) / ELEMENTS_PER_REPEAT;
-            const uint8_t repeats = static_cast<uint8_t>(
-                remainingRepeats > MAX_REPEATS
-                    ? MAX_REPEATS
-                    : remainingRepeats);
-            AscendC::Copy(
-                dst[offset],
-                src[offset],
-                static_cast<uint64_t>(ELEMENTS_PER_REPEAT),
-                repeats,
-                repeatParams);
-            offset +=
-                static_cast<uint32_t>(repeats) *
-                ELEMENTS_PER_REPEAT;
-        }
-        if (offset < count) {
-            AscendC::Copy(
-                dst[offset],
-                src[offset],
-                static_cast<uint64_t>(count - offset),
-                static_cast<uint8_t>(1),
-                repeatParams);
+                AscendC::DataCopyExtParams outputCopyParams;
+                outputCopyParams.blockCount =
+                    static_cast<uint16_t>(currentRows);
+                outputCopyParams.blockLen = chunkBytes;
+                outputCopyParams.srcStride = 0;
+                outputCopyParams.dstStride =
+                    currentRows == 1
+                        ? 0
+                        : static_cast<uint32_t>(outputStride);
+                AscendC::DataCopyPad(
+                    yGm_[
+                        (firstRow_ + rowOffset) * outRowBytes_ +
+                        outputOffsetBytes +
+                        chunkOffset],
+                    local,
+                    outputCopyParams);
+                AscendC::SetFlag<
+                    AscendC::HardEvent::MTE3_MTE2>(
+                        mte3ToMte2Event_);
+                AscendC::WaitFlag<
+                    AscendC::HardEvent::MTE3_MTE2>(
+                        mte3ToMte2Event_);
+            }
         }
     }
 
 private:
     AscendC::TPipe pipe_;
-    AscendC::TQue<AscendC::QuePosition::VECIN, BUFFER_NUM> inputQueue_;
-    AscendC::TQue<AscendC::QuePosition::VECOUT, BUFFER_NUM> outputQueue_;
-    AscendC::GlobalTensor<half> yGm_;
-    GM_ADDR inputAddresses_[16];
-    uint32_t outer_;
-    uint32_t outInner_;
-    uint32_t inputCount_;
-    uint32_t tileRows_;
-    uint32_t maxAlignedWidth_;
-    uint32_t rows_;
-    uint32_t firstRow_;
-    uint32_t widths_[32];
-    uint32_t offsets_[32];
+    AscendC::TBuf<AscendC::TPosition::VECCALC> copyBuffer_;
+    AscendC::GlobalTensor<uint8_t> yGm_;
+    uint64_t outer_;
+    uint64_t outRowBytes_;
+    uint64_t rows_;
+    uint64_t firstRow_;
+    event_t mte2ToMte3Event_;
+    event_t mte3ToMte2Event_;
 };
 
 extern "C" __global__ __aicore__ void concat(
@@ -206,19 +186,35 @@ extern "C" __global__ __aicore__ void concat(
     GM_ADDR tiling)
 {
     GET_TILING_DATA(tilingData, tiling);
+    if (tilingData.outer == 0 ||
+        tilingData.outRowBytes == 0) {
+        return;
+    }
     KernelConcat op;
     op.Init(
-        x,
         y,
         tilingData.outer,
-        tilingData.outInner,
-        tilingData.inputCount,
+        tilingData.outRowBytes,
         tilingData.baseRowsPerBlock,
         tilingData.extraBlocks,
-        tilingData.tileRows,
-        tilingData.maxAlignedWidth,
-        tilingData.widths,
-        tilingData.offsets,
         AscendC::GetBlockIdx());
-    op.Process();
+
+    AscendC::GlobalTensor<uint64_t> descriptor;
+    descriptor.SetGlobalBuffer(
+        reinterpret_cast<__gm__ uint64_t*>(x),
+        tilingData.inputCount + 256);
+    const uint64_t pointerOffsetWords =
+        descriptor.GetValue(0) / sizeof(uint64_t);
+    uint64_t outputOffsetBytes = 0;
+    for (uint32_t i = 0; i < tilingData.inputCount; ++i) {
+        const uint64_t inputAddress =
+            descriptor.GetValue(pointerOffsetWords + i);
+        const uint64_t widthBytes =
+            tilingData.inputRowBytes[i];
+        op.CopyOne(
+            reinterpret_cast<GM_ADDR>(inputAddress),
+            widthBytes,
+            outputOffsetBytes);
+        outputOffsetBytes += widthBytes;
+    }
 }
