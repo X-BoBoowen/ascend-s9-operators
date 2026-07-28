@@ -2,11 +2,11 @@
 
 本仓库记录昇腾 AI 创新大赛算子挑战赛 S9 五道 910B 赛题的适配、验证、性能分析与 Ascend C 优化工作。目标是在满足精度、泛化和提交契约的前提下，持续降低公开及隐藏用例的算子耗时。
 
-> 状态日期：2026-07-24
+> 状态日期：2026-07-28
 >
 > 目标环境：Ascend 910B、CANN 社区版 8.5.0、GCC 10.3、openEuler/ModelArts
 >
-> 当前结论：五题均有公开功能通过记录；五套正式算子契约源码均已完成 CANN 8.5.0 构建并生成 `.run` 和 ZIP。仓库中的 `submission-src/` 已同步为实际生成最终 ZIP 的正式源码，开发目录仍保留 `*Fast` 实验实现。
+> 当前结论：五题均有公开功能通过记录；五套正式算子契约源码均已完成 CANN 8.5.0 构建、独立安装验证和 ZIP 审计。仓库中的 `submission-src/` 已同步为实际生成最终 ZIP 的正式源码。平台 Case1–Case5 仍须逐题上传，以官方结果作为最终结论。
 
 ## 1. 当前进度
 
@@ -16,7 +16,7 @@
 | `IndexAdd` | `test pass` / `case1 verify result pass!` | `IndexAdd` | `.run` 和 ZIP 已生成并审计 | 公共形状使用 15 核，并支持更一般的 index 行数分配 |
 | `Transpose` | `test pass` / `case1 verify result pass!` | `Transpose` | `.run` 和 ZIP 已生成并审计 | 32 核二维连续 FP16 分块转置 |
 | `Concat` | 早期 `ConcatFast` 稳定版本通过 | `Concat` 动态输入列表 | `.run` 和 ZIP 已生成并审计 | 正式契约已构建；仍需在平台公开 harness 上完成最终闭环 |
-| `SquareSumV1` | `test pass` / `case1 verify result pass!` | `SquareSumV1` | `.run` 和 ZIP 已生成并审计 | 融合 v4 已验证正确；当前最快 runner 观察仍来自官方组合路径 |
+| `SquareSumV1` | `test pass` / `case1 verify result pass!` | `SquareSumV1` | 独立重建、922 例回归和 ZIP 审计完成 | 三种 dtype、任意合法轴组合和四类布局均有通用/向量路径 |
 
 “公开验证通过”只表示赛事提供的公开 `case1` 在指定云环境中通过，不代表隐藏用例、平台最终成绩或排名。“已生成并审计”表示正式源码已产出非空 `.run`，并完成 ZIP 路径白名单、正式 `OP_ADD`、内部实验名称残留和源码同步检查；它也不等价于平台上传验收通过。
 
@@ -29,7 +29,7 @@
 | `GreaterFast` | 公开 runner 约 `2.40 us`；稳态 kernel 常见约 `2.0–2.3 us` | 4 核版本优于此前 8 核候选 |
 | `IndexAddFast` | 公开 runner 约 `3.08 us` | 公开形状使用 15 核；显著快于 AiCPU 路径 |
 | `TransposeFast` | 稳态 kernel 常见约 `4.3–4.9 us` | 二维 `128×256 -> 256×128`，32 核 |
-| `SquareSumV1` | 官方组合路径约 `2.58 us` | 该数字不是自定义融合核的最终平台成绩 |
+| `SquareSumV1` | public 形状 task-time 中位数约 `6.49 us`；rank-5 三稀疏轴约 `49.22 us` | 相对初始通用版分别约快 3.1 倍和 8.2 倍；典型双稀疏轴约快 51 倍 |
 | `Concat` | 尚不发布最终数字 | 在线契约名称迁移和最终复测仍在进行 |
 
 赛事 runner 会在目标算子之间插入较大的 `Mul` 工作负载，因此 runner 输出、kernel profiler 时间和平台排行榜耗时不能直接混用。
@@ -87,15 +87,19 @@
 
 ### 3.5 SquareSumV1
 
-正式提交算子 `SquareSumV1` 源自自定义 `SquareSumFast` 融合核，执行：
+正式提交算子 `SquareSumV1` 是面向完整题面契约的自定义融合实现：
 
-1. FP16 输入搬入 UB；
-2. 转换为 FP32；
-3. 逐元素平方；
-4. 对最后一维执行 `WholeReduceSum`；
-5. 转回 FP16 并写回。
+- 支持 float16、bfloat16、float32，rank 1–5，负轴、多轴、`keep_dims`；
+- Host 统一规范化归约轴并生成输出/归约维度与输入 stride，保留通用坐标回退；
+- 连续后缀归约批量处理多行，长归约自动切回分段归约；
+- 连续中间轴使用二维搬运、批量平方和列累加；
+- 包含最后一维的分离轴使用分组后缀路径，可覆盖多个非相邻归约轴；
+- 不包含最后一维的分离轴使用跨步 inner 批处理；
+- FP16 先按输入 dtype 执行平方再转 FP32 累加，保持 `torch.square` 的溢出/舍入语义；
+- 小/中规模快路使用 32 核，输入达到约 100 万元素时自适应启用 40 核；
+- 多批 UB 复用显式设置 V→MTE2 同步，且 `WholeReduceSum` 每批不超过 255 次硬件上限。
 
-Host 按 outer 行数最多分配 32 核，并对 reduce 长度进行对齐。该融合版本已通过正确性验证，但当前选中的最快 runner 路径仍是官方 `Mul + ReduceSum` 组合，因此二者不能混为同一个性能结论。
+最终候选通过 46 个定向、150 个原随机和 726 个扩展用例，共 922 项；扩展集覆盖 31/32/33、63/64/65、8191/8192/8193、10000 等边界、三种 dtype、rank 1–5、各种轴顺序、负轴、`keep_dims`、NaN/Inf/±0、FP16 溢出和大输出分批。
 
 ## 4. 仓库结构
 
@@ -239,7 +243,7 @@ export TRANSPOSE_FAST_LIB_DIR=/path/to/Transpose/build_out/op_api/lib
 | IndexAdd | 重复 index、int8 回绕、FP32 非零维度 |
 | Concat | 负维度、空分片、FP16/FP32 |
 | Transpose | 三维置换、恒等置换、FP16/FP32 |
-| SquareSumV1 | 负轴、keepdim、多轴归约、FP16/FP32 |
+| SquareSumV1 | 三种 dtype、负轴/多轴、keepdim、rank 1–5、长归约边界、NaN/Inf/±0 和溢出语义 |
 
 这些测试用于验证 wrapper 的泛化回退和算子语义，不等价于赛事隐藏用例。
 
@@ -271,7 +275,7 @@ Greater_zip/
 `-- custom_opp_euleros_aarch64.run
 ```
 
-截至 2026-07-24，五题均已按这一结构生成最终候选 ZIP。离线审计包含：
+截至 2026-07-28，五题均已按这一结构生成最终候选 ZIP。离线审计包含：
 
 - ZIP 可完整读取，且每题只有顶层 `<Operator>_zip/`、`op_host/`、`op_kernel/` 和一个 `custom_opp_euleros_aarch64.run`；
 - Host/Kernel 文件名符合 `Zip_Check` 要求；
@@ -283,22 +287,21 @@ Greater_zip/
 
 | 文件 | SHA-256 |
 |---|---|
-| `Concat.zip` | `6bb09b39c2929b0ab2fdd750031f42d587af5bf221da8a8aa33d159f32327ce0` |
-| `Greater.zip` | `9f0b33ac82d3d4d4aad54d9836fedf83bf80e5cb5a041906b27b1f0047ffa4de` |
-| `IndexAdd.zip` | `b45c2bea00fb99182f6e26213954651e466ace552a6b93df81286b4fc3e137e9` |
-| `SquareSumV1.zip` | `8a5e869946ed33ea970e15d3df5ea746936dd3b69a28b1cd3830b3f7d6405b7f` |
-| `Transpose.zip` | `0c27c7d4be542435ae2a4f38b4fa51c6219aec48816e25948788b5ee4ccade28` |
+| `Concat.zip` | `82e17ebf1f062c42f61d64f0788b7c2ed6a2633ff26a9abd44fae5b6da7fe814` |
+| `Greater.zip` | `6c61f94e838843b052dd72e4cd5622cf309f5d3811370e15a6a15d2353df2539` |
+| `IndexAdd.zip` | `d2b087093f5a7e3bc1559cadacd703f7bf3592fbd1a5a5dcf72280a2d2ac2a5f` |
+| `SquareSumV1.zip` | `af9ae474bdedb0b5a7b55d39fc0de9a3bd448df39a01b08926304513412e642b` |
+| `Transpose.zip` | `0b88b825e7ee6e5cb598e5c3eb4638d4f652a4a0eb32671087a10a4aa3ff57e8` |
 
 最终候选包仍应逐题上传平台，以平台 `Zip_Check`、精度验证和性能结果作为最终结论。本仓库不提交 `.run`、ZIP、wheel、profile 数据库和构建缓存；二进制提交包必须在 CANN 8.5.0 目标环境中由对应源码重新构建。
 
 ## 10. 已知问题
 
 1. Concat 正式动态输入契约已经构建和打包，但尚未完成平台公开 harness 的最终功能与性能闭环。
-2. SquareSumV1 当前最快 runner 观察来自官方组合实现，而 `submission-src` 中是已验证正确的自定义融合版本，二者的耗时不能直接等同。
-3. 当前环境的 ModelArts SSH 接入已由远端在握手阶段关闭，因此本轮无法确认云端是否还有晚于最终 ZIP 的未同步实验文件。
-4. 公开用例通过以及离线包审计均不保证隐藏用例泛化、平台上传验收或榜单成绩。
-5. 五题尚未形成跨机器的一键生成、编译、安装、测试和打包流水线。
-6. 仓库当前未声明开源许可证；正式对外复用前需要补充合适的 LICENSE。
+2. SquareSumV1 的生成式 ACLNN 验证封装会在进入 tiling 前拒绝零长度 `IntArray`，因此空 `axis` 只能以等价的“显式全轴”做端到端测试；Host 已实现空轴全维归约语义，但仍需平台用例确认该属性的实际注入方式。
+3. 公开用例通过以及离线包审计均不保证隐藏用例泛化、平台上传验收或榜单成绩。
+4. 五题尚未形成跨机器的一键生成、编译、安装、测试和打包流水线。
+5. 仓库当前未声明开源许可证；正式对外复用前需要补充合适的 LICENSE。
 
 ## 11. 安全与仓库卫生
 
@@ -321,10 +324,9 @@ git ls-files | grep -Ei '\.(pem|key|run|so|whl)$'
 
 ## 12. 后续计划
 
-- 恢复 ModelArts 连接后，对比云端最近修改时间并确认没有遗漏更新；
 - 逐题上传最终候选 ZIP，记录 `Zip_Check`、精度和性能结果；
 - 完成 Concat 正式动态输入契约的公开用例闭环；
-- 对 SquareSumV1 融合核继续做性能 A/B；
+- 根据 SquareSumV1 平台实际 Case1–Case5 形状继续做定向性能 A/B；
 - 扩展五题隐藏形状、dtype、广播和非连续布局覆盖；
 - 增加统一的一键构建、测试、profile 和提交包脚本；
 - 按赛事要求准备 GitCode 开源 PR。
