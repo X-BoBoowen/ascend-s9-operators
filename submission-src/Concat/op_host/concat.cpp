@@ -3,8 +3,14 @@
 
 #include "concat_tiling.h"
 #include "register/op_def_registry.h"
+#include "tiling/platform/platform_ascendc.h"
 
 namespace optiling {
+static bool IsSpecialEmpty(const gert::Shape& shape)
+{
+    return shape.GetDimNum() == 1 && shape.GetDim(0) == 0;
+}
+
 static uint32_t GetElementBytes(const ge::DataType dataType)
 {
     switch (dataType) {
@@ -45,12 +51,24 @@ static ge::graphStatus TilingFunc(gert::TilingContext* context)
         return ge::GRAPH_FAILED;
     }
 
-    const gert::StorageShape* firstShape =
-        context->GetDynamicInputShape(0, 0);
-    if (firstShape == nullptr) {
+    uint32_t referenceInput = 0;
+    for (uint32_t i = 0; i < inputCount; ++i) {
+        const gert::StorageShape* candidate =
+            context->GetDynamicInputShape(0, i);
+        if (candidate == nullptr) {
+            return ge::GRAPH_FAILED;
+        }
+        if (!IsSpecialEmpty(candidate->GetStorageShape())) {
+            referenceInput = i;
+            break;
+        }
+    }
+    const gert::StorageShape* referenceShape =
+        context->GetDynamicInputShape(0, referenceInput);
+    if (referenceShape == nullptr) {
         return ge::GRAPH_FAILED;
     }
-    const gert::Shape& shape = firstShape->GetStorageShape();
+    const gert::Shape& shape = referenceShape->GetStorageShape();
     const size_t rank = shape.GetDimNum();
     constexpr size_t MAX_RANK = 8;
     if (rank == 0 || rank > MAX_RANK) {
@@ -95,7 +113,7 @@ static ge::graphStatus TilingFunc(gert::TilingContext* context)
     }
 
     const gert::Tensor* firstTensor =
-        context->GetDynamicInputTensor(0, 0);
+        context->GetDynamicInputTensor(0, referenceInput);
     if (firstTensor == nullptr) {
         return ge::GRAPH_FAILED;
     }
@@ -119,6 +137,10 @@ static ge::graphStatus TilingFunc(gert::TilingContext* context)
         }
         const gert::Shape& current =
             currentShape->GetStorageShape();
+        if (IsSpecialEmpty(current)) {
+            inputRowBytes[i] = 0;
+            continue;
+        }
         if (current.GetDimNum() != rank) {
             return ge::GRAPH_FAILED;
         }
@@ -151,11 +173,6 @@ static ge::graphStatus TilingFunc(gert::TilingContext* context)
         }
     }
 
-    constexpr uint32_t MAX_BLOCK_DIM = 16;
-    const uint32_t blockDim = outer64 == 0
-        ? 1
-        : static_cast<uint32_t>(
-            outer64 < MAX_BLOCK_DIM ? outer64 : MAX_BLOCK_DIM);
     uint64_t outRowElements = 0;
     uint64_t outRowBytes = 0;
     if (!SafeMultiply(
@@ -168,6 +185,52 @@ static ge::graphStatus TilingFunc(gert::TilingContext* context)
             outRowBytes)) {
         return ge::GRAPH_FAILED;
     }
+    uint64_t totalBytes = 0;
+    if (!SafeMultiply(outer64, outRowBytes, totalBytes)) {
+        return ge::GRAPH_FAILED;
+    }
+
+    constexpr uint32_t MAX_ROW_BLOCK_DIM = 16;
+    uint32_t rowBlockDim = outer64 == 0
+        ? 1
+        : static_cast<uint32_t>(
+            outer64 < MAX_ROW_BLOCK_DIM
+                ? outer64
+                : MAX_ROW_BLOCK_DIM);
+    auto platform =
+        platform_ascendc::PlatformAscendC(context->GetPlatformInfo());
+    uint32_t availableCores = platform.GetCoreNumAiv();
+    if (availableCores == 0) {
+        availableCores = MAX_ROW_BLOCK_DIM;
+    }
+    constexpr uint64_t TARGET_BYTES_PER_CORE = 64 * 1024;
+    uint64_t desiredCores64 =
+        totalBytes / TARGET_BYTES_PER_CORE +
+        (totalBytes % TARGET_BYTES_PER_CORE != 0 ? 1U : 0U);
+    if (desiredCores64 == 0) {
+        desiredCores64 = 1;
+    }
+    if (desiredCores64 > availableCores) {
+        desiredCores64 = availableCores;
+    }
+    const uint32_t desiredCores =
+        static_cast<uint32_t>(desiredCores64);
+    constexpr uint32_t MIN_DYNAMIC_ROW_CORES = 24;
+    if (outer64 >= MAX_ROW_BLOCK_DIM &&
+        desiredCores >= MIN_DYNAMIC_ROW_CORES &&
+        desiredCores > rowBlockDim) {
+        rowBlockDim = desiredCores;
+    }
+    const uint32_t copyMode =
+        outer64 < MAX_ROW_BLOCK_DIM &&
+        desiredCores > rowBlockDim
+            ? 1U
+            : 0U;
+    const uint32_t blockDim =
+        copyMode == 1 ? desiredCores : rowBlockDim;
+    const uint64_t totalWorkBlocks =
+        totalBytes / 32U +
+        (totalBytes % 32U != 0 ? 1U : 0U);
 
     ConcatTilingData tiling;
     tiling.set_outer(outer64);
@@ -180,6 +243,10 @@ static ge::graphStatus TilingFunc(gert::TilingContext* context)
     tiling.set_baseRowsPerBlock(outer64 / blockDim);
     tiling.set_extraBlocks(static_cast<uint32_t>(
         outer64 % blockDim));
+    tiling.set_copyMode(copyMode);
+    tiling.set_baseWorkBlocks(totalWorkBlocks / blockDim);
+    tiling.set_extraWorkBlocks(static_cast<uint32_t>(
+        totalWorkBlocks % blockDim));
     tiling.set_inputRowBytes(inputRowBytes);
 
     context->SetBlockDim(blockDim);
@@ -194,6 +261,11 @@ static ge::graphStatus TilingFunc(gert::TilingContext* context)
 }
 
 namespace ge {
+static bool IsSpecialEmpty(const gert::Shape& shape)
+{
+    return shape.GetDimNum() == 1 && shape.GetDim(0) == 0;
+}
+
 static ge::graphStatus InferShape(gert::InferShapeContext* context)
 {
     if (context == nullptr) {
@@ -203,8 +275,20 @@ static ge::graphStatus InferShape(gert::InferShapeContext* context)
     if (inputCount == 0) {
         return ge::GRAPH_FAILED;
     }
+    size_t referenceInput = 0;
+    for (size_t i = 0; i < inputCount; ++i) {
+        const gert::Shape* candidate =
+            context->GetDynamicInputShape(0, i);
+        if (candidate == nullptr) {
+            return ge::GRAPH_FAILED;
+        }
+        if (!IsSpecialEmpty(*candidate)) {
+            referenceInput = i;
+            break;
+        }
+    }
     const gert::Shape* firstShape =
-        context->GetDynamicInputShape(0, 0);
+        context->GetDynamicInputShape(0, referenceInput);
     gert::Shape* outputShape = context->GetOutputShape(0);
     if (firstShape == nullptr || outputShape == nullptr) {
         return ge::GRAPH_FAILED;
@@ -233,8 +317,13 @@ static ge::graphStatus InferShape(gert::InferShapeContext* context)
     for (size_t i = 0; i < inputCount; ++i) {
         const gert::Shape* currentShape =
             context->GetDynamicInputShape(0, i);
-        if (currentShape == nullptr ||
-            currentShape->GetDimNum() != rank) {
+        if (currentShape == nullptr) {
+            return ge::GRAPH_FAILED;
+        }
+        if (IsSpecialEmpty(*currentShape)) {
+            continue;
+        }
+        if (currentShape->GetDimNum() != rank) {
             return ge::GRAPH_FAILED;
         }
         for (size_t axis = 0; axis < rank; ++axis) {

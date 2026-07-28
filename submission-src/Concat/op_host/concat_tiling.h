@@ -14,6 +14,9 @@ BEGIN_TILING_DATA_DEF(ConcatTilingData)
     TILING_DATA_FIELD_DEF(uint32_t, elementBytes);
     TILING_DATA_FIELD_DEF(uint64_t, baseRowsPerBlock);
     TILING_DATA_FIELD_DEF(uint32_t, extraBlocks);
+    TILING_DATA_FIELD_DEF(uint32_t, copyMode);
+    TILING_DATA_FIELD_DEF(uint64_t, baseWorkBlocks);
+    TILING_DATA_FIELD_DEF(uint32_t, extraWorkBlocks);
     TILING_DATA_FIELD_DEF_ARR(uint64_t, 256, inputRowBytes);
 END_TILING_DATA_DEF;
 

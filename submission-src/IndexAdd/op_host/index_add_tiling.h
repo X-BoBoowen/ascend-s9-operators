@@ -12,6 +12,7 @@ BEGIN_TILING_DATA_DEF(IndexAddTilingData)
     TILING_DATA_FIELD_DEF(uint32_t, dimGroup);
     TILING_DATA_FIELD_DEF(uint32_t, dimGroups);
     TILING_DATA_FIELD_DEF(uint32_t, innerChunks);
+    TILING_DATA_FIELD_DEF(uint32_t, chunkGroups);
 END_TILING_DATA_DEF;
 
 REGISTER_TILING_DATA_CLASS(IndexAdd, IndexAddTilingData)

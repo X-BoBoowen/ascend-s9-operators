@@ -135,6 +135,18 @@ public:
             outputBuffer_,
             TILE_ELEMENTS * sizeof(uint8_t));
 
+        const uint32_t onesElements = static_cast<uint32_t>(
+            elements_ < TILE_ELEMENTS
+                ? (elements_ + COMPARE_ALIGNMENT_ELEMENTS - 1) /
+                    COMPARE_ALIGNMENT_ELEMENTS *
+                    COMPARE_ALIGNMENT_ELEMENTS
+                : TILE_ELEMENTS);
+        AscendC::Duplicate(
+            onesBuffer_.Get<half>(),
+            static_cast<half>(1),
+            onesElements);
+        AscendC::PipeBarrier<PIPE_V>();
+
         mte2ToVEvent_ = static_cast<event_t>(
             pipe_.FetchEventID(AscendC::HardEvent::MTE2_V));
         vToMte2Event_ = static_cast<event_t>(
@@ -145,12 +157,8 @@ public:
             pipe_.FetchEventID(AscendC::HardEvent::V_S));
         vToMte3Event_ = static_cast<event_t>(
             pipe_.FetchEventID(AscendC::HardEvent::V_MTE3));
-        sToMte3Event_ = static_cast<event_t>(
-            pipe_.FetchEventID(AscendC::HardEvent::S_MTE3));
         mte3ToVEvent_ = static_cast<event_t>(
             pipe_.FetchEventID(AscendC::HardEvent::MTE3_V));
-        mte3ToSEvent_ = static_cast<event_t>(
-            pipe_.FetchEventID(AscendC::HardEvent::MTE3_S));
     }
 
     __aicore__ inline void Process()
@@ -184,7 +192,7 @@ private:
         return inputOffset;
     }
 
-    __aicore__ inline void LoadInput(
+    __aicore__ inline uint32_t LoadInput(
         const AscendC::GlobalTensor<T>& source,
         AscendC::LocalTensor<T>& local,
         uint64_t outputStart,
@@ -216,7 +224,7 @@ private:
                 mte2ToVEvent_);
             AscendC::WaitFlag<AscendC::HardEvent::MTE2_V>(
                 mte2ToVEvent_);
-            return;
+            return 1;
         }
 
         if (scalar) {
@@ -241,7 +249,7 @@ private:
                     sToVEvent_);
                 AscendC::Duplicate(local, value, aligned);
             }
-            return;
+            return 0;
         }
 
         if (constantRunElements > 1 &&
@@ -281,7 +289,10 @@ private:
                 AscendC::WaitFlag<AscendC::HardEvent::S_V>(
                     sToVEvent_);
             }
-            return;
+            if constexpr (AscendC::IsSameType<T, int8_t>::value) {
+                return 2;
+            }
+            return 0;
         }
 
         if (runElements > 1 &&
@@ -321,7 +332,7 @@ private:
                 mte2ToVEvent_);
             AscendC::WaitFlag<AscendC::HardEvent::MTE2_V>(
                 mte2ToVEvent_);
-            return;
+            return 1;
         }
 
         uint64_t coordinates[MAX_RANK] = {};
@@ -353,6 +364,7 @@ private:
         }
         AscendC::SetFlag<AscendC::HardEvent::S_V>(sToVEvent_);
         AscendC::WaitFlag<AscendC::HardEvent::S_V>(sToVEvent_);
+        return 2;
     }
 
     __aicore__ inline void MaskToOutput(
@@ -365,11 +377,6 @@ private:
         AscendC::LocalTensor<half> selected =
             selectedBuffer_.Get<half>();
 
-        AscendC::Duplicate(
-            ones,
-            static_cast<half>(1),
-            aligned);
-        AscendC::PipeBarrier<PIPE_V>();
         AscendC::Select(
             selected,
             mask,
@@ -404,6 +411,76 @@ private:
         MaskToOutput(mask, aligned, outputLocal);
     }
 
+    __aicore__ inline void VectorCompareInt32(
+        const AscendC::LocalTensor<int32_t>& selfLocal,
+        const AscendC::LocalTensor<int32_t>& otherLocal,
+        uint32_t aligned,
+        AscendC::LocalTensor<uint8_t>& outputLocal)
+    {
+        AscendC::LocalTensor<int32_t> maximum =
+            floatSelfBuffer_.Get<int32_t>();
+        AscendC::LocalTensor<half> greaterOrEqual =
+            halfSelfBuffer_.Get<half>();
+        AscendC::LocalTensor<half> equal =
+            halfOtherBuffer_.Get<half>();
+        AscendC::LocalTensor<half> ones =
+            onesBuffer_.Get<half>();
+        AscendC::LocalTensor<half> selected =
+            selectedBuffer_.Get<half>();
+        AscendC::LocalTensor<uint8_t> greaterOrEqualMask =
+            maskBuffer_.Get<uint8_t>();
+        AscendC::LocalTensor<uint8_t> equalMask =
+            floatOtherBuffer_.Get<uint8_t>();
+
+        AscendC::Max(
+            maximum,
+            selfLocal,
+            otherLocal,
+            static_cast<int32_t>(aligned));
+        AscendC::PipeBarrier<PIPE_V>();
+        AscendC::Compare(
+            greaterOrEqualMask,
+            maximum,
+            selfLocal,
+            AscendC::CMPMODE::EQ,
+            aligned);
+        AscendC::PipeBarrier<PIPE_V>();
+        AscendC::Compare(
+            equalMask,
+            selfLocal,
+            otherLocal,
+            AscendC::CMPMODE::EQ,
+            aligned);
+        AscendC::PipeBarrier<PIPE_V>();
+        AscendC::Select(
+            greaterOrEqual,
+            greaterOrEqualMask,
+            ones,
+            static_cast<half>(0),
+            AscendC::SELMODE::VSEL_TENSOR_SCALAR_MODE,
+            aligned);
+        AscendC::PipeBarrier<PIPE_V>();
+        AscendC::Select(
+            equal,
+            equalMask,
+            ones,
+            static_cast<half>(0),
+            AscendC::SELMODE::VSEL_TENSOR_SCALAR_MODE,
+            aligned);
+        AscendC::PipeBarrier<PIPE_V>();
+        AscendC::Sub(
+            selected,
+            greaterOrEqual,
+            equal,
+            aligned);
+        AscendC::PipeBarrier<PIPE_V>();
+        AscendC::Cast(
+            outputLocal,
+            selected,
+            AscendC::RoundMode::CAST_RINT,
+            aligned);
+    }
+
     __aicore__ inline void ProcessTile(
         uint64_t outputStart,
         uint32_t current)
@@ -419,7 +496,7 @@ private:
         AscendC::LocalTensor<uint8_t> outputLocal =
             outputBuffer_.Get<uint8_t>();
 
-        LoadInput(
+        const uint32_t selfLoadPipeline = LoadInput(
             selfGm_,
             selfLocal,
             outputStart,
@@ -430,7 +507,7 @@ private:
             selfRunElements_,
             selfConstantRunElements_,
             selfStrides_);
-        LoadInput(
+        const uint32_t otherLoadPipeline = LoadInput(
             otherGm_,
             otherLocal,
             outputStart,
@@ -443,19 +520,15 @@ private:
             otherStrides_);
 
         if constexpr (AscendC::IsSameType<T, int32_t>::value) {
-            for (uint32_t index = 0;
-                 index < aligned;
-                 ++index) {
-                const uint8_t result =
-                    index < current &&
-                    selfLocal.GetValue(index) >
-                        otherLocal.GetValue(index);
-                outputLocal.SetValue(index, result);
-            }
-            AscendC::SetFlag<AscendC::HardEvent::S_MTE3>(
-                sToMte3Event_);
-            AscendC::WaitFlag<AscendC::HardEvent::S_MTE3>(
-                sToMte3Event_);
+            VectorCompareInt32(
+                selfLocal,
+                otherLocal,
+                aligned,
+                outputLocal);
+            AscendC::SetFlag<AscendC::HardEvent::V_MTE3>(
+                vToMte3Event_);
+            AscendC::WaitFlag<AscendC::HardEvent::V_MTE3>(
+                vToMte3Event_);
         } else if constexpr (
             AscendC::IsSameType<T, float>::value) {
             VectorCompare(
@@ -531,6 +604,21 @@ private:
                 vToMte3Event_);
         }
 
+        const uint32_t loadPipelines =
+            selfLoadPipeline | otherLoadPipeline;
+        if ((loadPipelines & 1U) != 0U) {
+            AscendC::SetFlag<AscendC::HardEvent::V_MTE2>(
+                vToMte2Event_);
+            AscendC::WaitFlag<AscendC::HardEvent::V_MTE2>(
+                vToMte2Event_);
+        }
+        if ((loadPipelines & 2U) != 0U) {
+            AscendC::SetFlag<AscendC::HardEvent::V_S>(
+                vToSEvent_);
+            AscendC::WaitFlag<AscendC::HardEvent::V_S>(
+                vToSEvent_);
+        }
+
         AscendC::DataCopyExtParams outputCopyParams;
         outputCopyParams.blockCount = 1;
         outputCopyParams.blockLen = current;
@@ -541,17 +629,10 @@ private:
             outputLocal,
             outputCopyParams);
 
-        if constexpr (AscendC::IsSameType<T, int32_t>::value) {
-            AscendC::SetFlag<AscendC::HardEvent::MTE3_S>(
-                mte3ToSEvent_);
-            AscendC::WaitFlag<AscendC::HardEvent::MTE3_S>(
-                mte3ToSEvent_);
-        } else {
-            AscendC::SetFlag<AscendC::HardEvent::MTE3_V>(
-                mte3ToVEvent_);
-            AscendC::WaitFlag<AscendC::HardEvent::MTE3_V>(
-                mte3ToVEvent_);
-        }
+        AscendC::SetFlag<AscendC::HardEvent::MTE3_V>(
+            mte3ToVEvent_);
+        AscendC::WaitFlag<AscendC::HardEvent::MTE3_V>(
+            mte3ToVEvent_);
     }
 
 private:
@@ -589,9 +670,7 @@ private:
     event_t sToVEvent_;
     event_t vToSEvent_;
     event_t vToMte3Event_;
-    event_t sToMte3Event_;
     event_t mte3ToVEvent_;
-    event_t mte3ToSEvent_;
 };
 
 extern "C" __global__ __aicore__ void greater(

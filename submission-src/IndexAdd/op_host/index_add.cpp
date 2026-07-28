@@ -77,6 +77,10 @@ static ge::graphStatus TilingFunc(gert::TilingContext* context)
     }
     const uint64_t indexCount =
         static_cast<uint64_t>(rawIndexCount);
+    constexpr uint64_t MAX_INDEX_COUNT = 8000;
+    if (indexCount > MAX_INDEX_COUNT) {
+        return ge::GRAPH_FAILED;
+    }
 
     uint64_t outer = 1;
     uint64_t inner = 1;
@@ -123,6 +127,9 @@ static ge::graphStatus TilingFunc(gert::TilingContext* context)
     constexpr uint32_t MAX_BLOCK_DIM = 40;
     const uint64_t innerChunks =
         inner == 0 ? 0 : (inner + INNER_CHUNK - 1) / INNER_CHUNK;
+    if (innerChunks > std::numeric_limits<uint32_t>::max()) {
+        return ge::GRAPH_FAILED;
+    }
     uint64_t parallelBase = 0;
     if (!SafeMultiply(outer, innerChunks, parallelBase)) {
         return ge::GRAPH_FAILED;
@@ -143,10 +150,44 @@ static ge::graphStatus TilingFunc(gert::TilingContext* context)
     }
     const uint64_t dimGroups =
         dimSize == 0 ? 0 : (dimSize + dimGroup - 1) / dimGroup;
-    uint64_t taskCount = 0;
-    if (!SafeMultiply(parallelBase, dimGroups, taskCount)) {
+    if (dimGroups > std::numeric_limits<uint32_t>::max()) {
         return ge::GRAPH_FAILED;
     }
+    uint64_t baseTasks = 0;
+    if (!SafeMultiply(outer, dimGroups, baseTasks)) {
+        return ge::GRAPH_FAILED;
+    }
+    uint64_t chunkGroups = 1;
+    if (baseTasks > 0 && baseTasks < MAX_BLOCK_DIM) {
+        chunkGroups = MAX_BLOCK_DIM / baseTasks;
+        if (chunkGroups > innerChunks) {
+            chunkGroups = innerChunks;
+        }
+        if (chunkGroups == 0) {
+            chunkGroups = 1;
+        }
+    }
+    uint64_t reuseTaskCount = 0;
+    if (!SafeMultiply(baseTasks, chunkGroups, reuseTaskCount)) {
+        return ge::GRAPH_FAILED;
+    }
+    uint64_t legacyTaskCount = 0;
+    if (!SafeMultiply(parallelBase, dimGroups, legacyTaskCount)) {
+        return ge::GRAPH_FAILED;
+    }
+    const ge::DataType dataType = selfTensor->GetDataType();
+    const bool isFloatingPoint =
+        dataType == ge::DT_FLOAT ||
+        dataType == ge::DT_FLOAT16 ||
+        dataType == ge::DT_BF16;
+    const uint64_t minimumReuseGroups =
+        isFloatingPoint ? 8 : 16;
+    const bool useHitReuse =
+        indexCount >= 64 &&
+        innerChunks > chunkGroups &&
+        dimGroups >= minimumReuseGroups;
+    const uint64_t taskCount =
+        useHitReuse ? reuseTaskCount : legacyTaskCount;
     const uint32_t blockDim = taskCount == 0
         ? 1
         : static_cast<uint32_t>(
@@ -165,11 +206,19 @@ static ge::graphStatus TilingFunc(gert::TilingContext* context)
     tiling.set_dimGroup(static_cast<uint32_t>(dimGroup));
     tiling.set_dimGroups(static_cast<uint32_t>(dimGroups));
     tiling.set_innerChunks(static_cast<uint32_t>(innerChunks));
+    tiling.set_chunkGroups(static_cast<uint32_t>(chunkGroups));
 
     const bool useBatchedInt8 =
         selfTensor->GetDataType() == ge::DT_INT8 &&
-        indexCount > dimSize * 4;
-    context->SetTilingKey(useBatchedInt8 ? 2 : 1);
+        indexCount != 0 &&
+        dimSize <= (indexCount - 1) / 4;
+    uint64_t tilingKey = useBatchedInt8 ? 2 : 1;
+    if (useHitReuse) {
+        tilingKey = useBatchedInt8 ? 4 : 3;
+    } else if (innerChunks == 1) {
+        tilingKey = useBatchedInt8 ? 6 : 5;
+    }
+    context->SetTilingKey(tilingKey);
     context->SetBlockDim(blockDim);
     tiling.SaveToBuffer(
         context->GetRawTilingData()->GetData(),

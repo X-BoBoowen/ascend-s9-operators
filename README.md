@@ -1,336 +1,441 @@
-# 昇腾 AI 创新大赛 · 算子挑战赛 S9
+# 昇腾 AI 创新大赛 S9 算子优化
 
-本仓库记录昇腾 AI 创新大赛算子挑战赛 S9 五道 910B 赛题的适配、验证、性能分析与 Ascend C 优化工作。目标是在满足精度、泛化和提交契约的前提下，持续降低公开及隐藏用例的算子耗时。
+本仓库记录 Ascend 910B、CANN 社区版 8.5.0 环境下五道 S9
+算子的通用实现、真机验证、性能实验和正式提交源码。
 
-> 状态日期：2026-07-28
+当前工作原则：
+
+- 先满足题面全部 dtype、rank、轴、广播、空输入和非对齐约束；
+- 不根据隐藏样例猜 shape，不写公开 Case 专用分支；
+- 每题在独立实验目录中构建、安装、回归和打包；
+- 只有平台 Case1–Case5 才能作为最终正确性和性能结论；
+- Git 仓库保存源码、测试与文档，不保存 `.run`、ZIP、wheel 和
+  profiler 数据库。
+
+> 状态时间：2026-07-28 16:35（Asia/Shanghai）
 >
-> 目标环境：Ascend 910B、CANN 社区版 8.5.0、GCC 10.3、openEuler/ModelArts
->
-> 当前结论：五题均有公开功能通过记录；五套正式算子契约源码均已完成 CANN 8.5.0 构建、独立安装验证和 ZIP 审计。仓库中的 `submission-src/` 已同步为实际生成最终 ZIP 的正式源码。平台 Case1–Case5 仍须逐题上传，以官方结果作为最终结论。
+> 当前阶段：`Concat`、`Greater`、`IndexAdd` 已完成本轮工程闭环并
+> 分别生成待测 ZIP；`Transpose`、`SquareSumV1` 后续继续优化。
 
-## 1. 当前进度
+## 1. 当前状态
 
-| 赛题 | 最近稳定公开验证 | 正式提交契约 | 构建/打包状态 | 状态说明 |
-|---|---|---|---|---|
-| `Greater` | `test pass` / `case1 verify result pass!` | `Greater` | `.run` 和 ZIP 已生成并审计 | 4 个 Vector Core 的 FP16 快路已迁移到正式名称 |
-| `IndexAdd` | `test pass` / `case1 verify result pass!` | `IndexAdd` | `.run` 和 ZIP 已生成并审计 | 公共形状使用 15 核，并支持更一般的 index 行数分配 |
-| `Transpose` | `test pass` / `case1 verify result pass!` | `Transpose` | `.run` 和 ZIP 已生成并审计 | 32 核二维连续 FP16 分块转置 |
-| `Concat` | 早期 `ConcatFast` 稳定版本通过 | `Concat` 动态输入列表 | `.run` 和 ZIP 已生成并审计 | 正式契约已构建；仍需在平台公开 harness 上完成最终闭环 |
-| `SquareSumV1` | `test pass` / `case1 verify result pass!` | `SquareSumV1` | 独立重建、922 例回归和 ZIP 审计完成 | 三种 dtype、任意合法轴组合和四类布局均有通用/向量路径 |
+| 题目 | 工程状态 | 真机回归 | 当前提交包 | 平台状态 |
+| --- | --- | ---: | --- | --- |
+| Concat | 本轮完成 | 9 定向 + 100 随机 + 168 扩展 | 已生成并审计 | 新包待上传 |
+| Greater | 本轮完成 | 26 定向 + 220 随机 + 9 个 int32 扩展；扩展集连续复跑 3 次 | 已生成并审计 | 新包待上传 |
+| IndexAdd | 本轮完成 | 23 定向 + 170 随机 + 345 扩展 = 538 | 已生成并审计 | 新包已交用户评测 |
+| Transpose | 已有通用正确版本 | 48 定向 + 200 随机 + 152 扩展 | 旧候选保留 | 下一题，性能优化暂停于方案审查阶段 |
+| SquareSumV1 | 已有通用正确版本 | 46 定向 + 150 随机 + 726 扩展 = 922 | 旧候选保留 | 后续继续 |
 
-“公开验证通过”只表示赛事提供的公开 `case1` 在指定云环境中通过，不代表隐藏用例、平台最终成绩或排名。“已生成并审计”表示正式源码已产出非空 `.run`，并完成 ZIP 路径白名单、正式 `OP_ADD`、内部实验名称残留和源码同步检查；它也不等价于平台上传验收通过。
+这里的“本轮完成”表示：
 
-## 2. 已观察到的性能
+1. 正式算子名称、Host、Kernel、Tiling 和 CMake 契约一致；
+2. 在 910B4、CANN 8.5.0 环境重新构建出 `.run`；
+3. 安装该 `.run` 后，用自定义扩展直接调用正式算子；
+4. 完成定向、随机、扩展和大规模压力回归；
+5. ZIP 结构、文件权限、源码哈希和 `.run` 哈希已审计；
+6. 本地 ZIP 与云端发布 ZIP 完全一致。
 
-以下数据用于版本选择，均来自同一类 Ascend 910B 云实例。不同实例、驱动状态、profiler 采样和 warm-up 会产生波动。
+它不表示已经获得新的榜单成绩。三题的新包必须逐题上传，平台
+Case1–Case5 全 Pass 后才能确认隐藏用例闭环。
 
-| 算子 | 代表性稳定观察 | 备注 |
-|---|---:|---|
-| `GreaterFast` | 公开 runner 约 `2.40 us`；稳态 kernel 常见约 `2.0–2.3 us` | 4 核版本优于此前 8 核候选 |
-| `IndexAddFast` | 公开 runner 约 `3.08 us` | 公开形状使用 15 核；显著快于 AiCPU 路径 |
-| `TransposeFast` | 稳态 kernel 常见约 `4.3–4.9 us` | 二维 `128×256 -> 256×128`，32 核 |
-| `SquareSumV1` | public 形状 task-time 中位数约 `6.49 us`；rank-5 三稀疏轴约 `49.22 us` | 相对初始通用版分别约快 3.1 倍和 8.2 倍；典型双稀疏轴约快 51 倍 |
-| `Concat` | 尚不发布最终数字 | 在线契约名称迁移和最终复测仍在进行 |
+## 2. 本轮三题的提交清单
 
-赛事 runner 会在目标算子之间插入较大的 `Mul` 工作负载，因此 runner 输出、kernel profiler 时间和平台排行榜耗时不能直接混用。
+正式 ZIP 位于本地仓库外：
 
-## 3. 实现概览
+```text
+D:\29722\Desktop\GCC\提交相关材料\
+|-- Concat.zip
+|-- Greater.zip
+`-- IndexAdd.zip
+```
 
-### 3.1 Greater
+| 文件 | 大小 | SHA-256 |
+| --- | ---: | --- |
+| `Concat.zip` | 410639 B | `b43e88f82ba5230f9172b1f1f2f4c07381d4f14cd1fb5a4de3cf3871c55d25b2` |
+| `Greater.zip` | 398168 B | `316797810d06b57d18c898d1fe449c1b0b51565c6a842845dded75524f7f868d` |
+| `IndexAdd.zip` | 417920 B | `cf8c08a60d3b356686a07e136766dd06128afa87dccf67d9c9940330843d990b` |
 
-正式提交算子 `Greater` 源自开发阶段的 `GreaterFast`，面向连续、同形状的 FP16 输入：
+包内 `.run`：
 
-- Host tiling 根据元素数量选择 1–4 个 Vector Core；
-- 每核处理连续片段；
-- kernel 通过向量计算生成严格规范的 bool 输出；
-- 不满足快路条件的输入由 PyTorch 扩展回退到 ACLNN。
+| 题目 | `.run` SHA-256 |
+| --- | --- |
+| Concat | `9dca80b07e85eacf9b90ac98349f64bf0ba0db19565c440f0c16f12cbf1ca873` |
+| Greater | `d8ab6f81aa1eaa775cbe69078db09901037ccad667216697371475a42dbb4298` |
+| IndexAdd | `58a5be8bbbc8db62708973fea21bd6630e1d938ae9c8a4ad28132f3014ce679d` |
 
-已覆盖 NaN、Inf、正负零、相等值、FP16 子正规数、FP32、int32、广播及非连续输入等专项测试。
+三个 ZIP 均只有一个顶层 `<Operator>_zip/`，包含 `op_host/`、
+`op_kernel/` 和一个非空 `custom_opp_euleros_aarch64.run`。
+`IndexAdd` 的 `.run` 在 ZIP 中保持 `0750`，其余两个为 `0755`。
 
-### 3.2 IndexAdd
-
-正式提交算子 `IndexAdd` 源自开发阶段的 `IndexAddFast`，面向 int8 输入、int32 index 和按第 0 维累加：
-
-- 每核基础处理 8 条 source 行；
-- Host 根据 index 数量动态选择核数，最多 32 核；
-- public case 的 120 条 index 使用 15 核；
-- kernel 使用 int8 原子加，保持重复 index 的并发语义；
-- tiling key 区分整 8 行和尾块路径；
-- wrapper 先复制原 input，再对命中行进行累加。
-
-专项验证包括最坏重复 index、跨核冲突、正负溢出模 256、未命中行保持、随机全范围 int8 以及重复运行竞态检查。
-
-### 3.3 Transpose
-
-正式提交算子 `Transpose` 源自开发阶段的 `TransposeFast`，当前处理二维连续 FP16 转置：
-
-- 将矩阵划分为固定 tile；
-- 最多使用 32 个 Vector Core；
-- Host 均匀分配 tile，并单独处理余数；
-- kernel 使用 Ascend C `Transpose` 指令；
-- 使用 4 级队列缓冲；
-- 非二维、非 FP16、非连续或不符合快路契约的输入回退到 `aclnnPermute`。
-
-### 3.4 Concat
-
-正式提交算子 `Concat` 使用动态输入列表契约，kernel 算法源自稳定 `ConcatFast`，面向末维拼接：
-
-- 支持多个 FP16 输入；
-- Host 通过动态输入列表读取输入数量和各输入形状；
-- kernel 通过 `ListTensorDesc` 获取每个输入的 GM 地址；
-- Host 计算 outer、各输入末维宽度和输出行跨度；
-- 最多使用 16 核；
-- kernel 使用双缓冲，在输入和输出 GM 之间按行搬运；
-- 输入宽度与偏移由 tiling 数据统一传入。
-
-早期 `ConcatFast` 和 `ConcatD` 仅作为开发过程记录；`submission-src/Concat` 已切换到赛事正式 `Concat` 契约并成功生成提交包。正式契约仍需在平台公开 harness 上完成最终功能和性能复测，因此不发布未经确认的最终耗时。
-
-### 3.5 SquareSumV1
-
-正式提交算子 `SquareSumV1` 是面向完整题面契约的自定义融合实现：
-
-- 支持 float16、bfloat16、float32，rank 1–5，负轴、多轴、`keep_dims`；
-- Host 统一规范化归约轴并生成输出/归约维度与输入 stride，保留通用坐标回退；
-- 连续后缀归约批量处理多行，长归约自动切回分段归约；
-- 连续中间轴使用二维搬运、批量平方和列累加；
-- 包含最后一维的分离轴使用分组后缀路径，可覆盖多个非相邻归约轴；
-- 不包含最后一维的分离轴使用跨步 inner 批处理；
-- FP16 先按输入 dtype 执行平方再转 FP32 累加，保持 `torch.square` 的溢出/舍入语义；
-- 小/中规模快路使用 32 核，输入达到约 100 万元素时自适应启用 40 核；
-- 多批 UB 复用显式设置 V→MTE2 同步，且 `WholeReduceSum` 每批不超过 255 次硬件上限。
-
-最终候选通过 46 个定向、150 个原随机和 726 个扩展用例，共 922 项；扩展集覆盖 31/32/33、63/64/65、8191/8192/8193、10000 等边界、三种 dtype、rank 1–5、各种轴顺序、负轴、`keep_dims`、NaN/Inf/±0、FP16 溢出和大输出分批。
-
-## 4. 仓库结构
+## 3. 仓库结构
 
 ```text
 .
-|-- case_910b/
-|   |-- Greater/            # 官方公开用例、CppExtension 和运行脚本
-|   |-- IndexAdd/
-|   |-- Transpose/
-|   |-- Concat/
-|   `-- SquareSumV1/
-|-- submission-src/         # 实际生成最终 ZIP 的五题正式契约源码
+|-- submission-src/
+|   |-- Concat/             # 本轮正式源码
+|   |-- Greater/            # 本轮正式源码
+|   |-- IndexAdd/           # 本轮正式源码
+|   |-- Transpose/          # 上一轮稳定源码
+|   `-- SquareSumV1/        # 上一轮稳定源码
+|-- validation/
+|   |-- Concat/             # 定向、随机、profile 与扩展封装
 |   |-- Greater/
-|   |-- IndexAdd/
-|   |-- Transpose/
-|   |-- Concat/
-|   `-- SquareSumV1/
-|-- operator-descriptors/   # 开发阶段 *Fast 工程使用的 msopgen 描述
-|-- greater-fast/           # GreaterFast 早期独立开发快照
-|-- index-add-fast/         # IndexAddFast 早期独立开发快照
-|-- extra_correctness.py    # 五题附加边界正确性测试
-|-- diagnose_index_add.py   # IndexAdd 定向诊断
-`-- sheet-inspect/          # 赛题表格的只读检查工具
+|   `-- IndexAdd/
+|-- case_910b/              # 官方公开 case 与运行脚本
+|-- operator-descriptors/   # 开发期工程描述
+|-- EXPERT_OPINION_SYNTHESIS_20260727.md
+|-- EXPERT_REVIEW_TRACKER.md
+|-- RELEASE_SNAPSHOT_20260728_FIRST_THREE.md
+`-- README.md
 ```
 
-`submission-src/` 是当前最重要的源码入口。它已从五个最终 ZIP 反向核对并同步，只保留可开源的 Host/Kernel 源码，不提交 `.run`。每题包含：
+正式源码入口始终是 `submission-src/<Operator>/`。包内源码已与这里
+逐文件计算 SHA-256，三题全部匹配。
+
+## 4. Concat
+
+### 4.1 题面覆盖
+
+- dtype：`float32`、`float16`、`int32`、`int8`；
+- 动态输入列表；
+- rank 1–8；
+- 正轴和负轴；
+- 任意合法拼接轴；
+- 首个或中间输入为空；
+- 非 32B 对齐；
+- 当前 Tiling 容量最多 256 个输入。
+
+### 4.2 实现
+
+Host 将任意拼接轴折叠为：
 
 ```text
-<Operator>/
-|-- op_host/
-|   |-- CMakeLists.txt
-|   |-- <official_name>.cpp
-|   `-- <official_name>_tiling.h
-`-- op_kernel/
-    |-- CMakeLists.txt
-    `-- <official_name>.cpp
+[outer, input_dim * inner] -> [outer, sum(input_dim) * inner]
 ```
 
-正式文件名映射如下：
+以字节为单位传递每个输入的行宽，避免不同 dtype 下重复维护元素
+对齐逻辑。Kernel 通过 `ListTensorDesc` 读取动态输入地址。
 
-| 赛题 | Host/Kernel 文件 | Tiling 文件 | 正式算子/Kernel | 开发阶段对应名称 |
-|---|---|---|---|---|
-| Greater | `greater.cpp` | `greater_tiling.h` | `Greater` / `greater` | `GreaterFast` / `greater_fast` |
-| IndexAdd | `index_add.cpp` | `index_add_tiling.h` | `IndexAdd` / `index_add` | `IndexAddFast` / `index_add_fast` |
-| SquareSumV1 | `square_sum_v1.cpp` | `square_sum_v1_tiling.h` | `SquareSumV1` / `square_sum_v1` | `SquareSumFast` / `square_sum_fast` |
-| Concat | `concat.cpp` | `concat_tiling.h` | `Concat` / `concat` | `ConcatFast` / `concat_fast` |
-| Transpose | `transpose.cpp` | `transpose_tiling.h` | `Transpose` / `transpose` | `TransposeFast` / `transpose_fast` |
+当前有两类工作划分：
 
-平台 `Zip_Check` 会检查正式文件名。正式提交还要求 `OP_ADD`、tiling 注册类、kernel 入口、CMake 生成目标以及 `.run` 中的算子元数据保持一致；仅在 ZIP 内随意改名会导致提交契约不一致。
+- `outer` 足够时按行分核；
+- `outer` 很小而总字节数很大时按全局 32B 工作块分核，避免超宽单行
+  只占用一个核。
 
-## 5. 环境要求
+大规模多行搬运使用 `DataCopyPad` 二维搬运；行跨度超过硬件 stride
+上限时自动回退逐行搬运。Host 根据总字节量和实际 Vector Core 数量
+动态选择核数，小任务避免过度起核，大任务可超过旧版固定 16 核。
 
-| 项目 | 版本/配置 |
-|---|---|
-| 设备 | Ascend 910B |
-| CANN | 社区版 8.5.0 |
-| 编译器 | GCC/G++ 10.3 |
-| Python | 比赛环境 Python 3.9 |
-| PyTorch NPU | 比赛镜像内置版本 |
-| 操作系统 | openEuler / ModelArts 比赛环境 |
+### 4.3 验证
 
-初始化环境示例：
+- 9 个定向用例；
+- 100 个随机用例；
+- 168 个扩展用例；
+- 全部与 `torch.cat` 逐位相等。
 
-```bash
-source /path/to/Ascend/cann-8.5.0/set_env.sh
-export PATH=/path/to/gcc-10.3/bin:$PATH
-export CC=/path/to/gcc-10.3/bin/gcc
-export CXX=/path/to/gcc-10.3/bin/g++
-```
+覆盖内容包括 33/256 输入、rank 1–8、dim 0/中间/末轴、负轴、
+首个空输入、多个空输入、非对齐宽度、宽行分块和大 outer。
 
-请勿直接复用其他 CANN 版本生成的工程或 `.run`。
+本地事件计时只用于版本 A/B，不等价于平台成绩。代表性 p50：
 
-## 6. 构建 Ascend C 算子
+| 场景 | p50 |
+| --- | ---: |
+| public 非对齐 | 110.09 us |
+| 对齐多行 | 107.22 us |
+| dim0 大输入 | 101.76 us |
+| outer=128 大输入 | 101.04 us |
+| 256 输入 | 484.60 us |
 
-`operator-descriptors/` 保存的是开发阶段内部 `*Fast` 工程的算子描述。以 GreaterFast 为例：
+## 5. Greater
 
-```bash
-msopgen gen \
-  -i operator-descriptors/greater_fast.json \
-  -f pytorch \
-  -c ai_core-ascend910b \
-  -out build/Greater \
-  -lan cpp
-```
+### 5.1 题面覆盖
 
-这类描述适合复现开发 harness，但不能直接与正式 `submission-src/` 混用。正式提交工程必须使用与赛事签名一致的算子描述生成，再同步对应 `submission-src/<Operator>/op_host` 和 `op_kernel`。需要注意：
+- dtype：`float32`、`bfloat16`、`float16`、`int32`、`int8`；
+- 输出严格为 bool；
+- rank 0–8；
+- NumPy/PyTorch 广播；
+- 同形、标量、末维广播、交错广播；
+- NaN、Inf、`+0/-0`、相等值；
+- 空输出和非 32B 对齐。
 
-- `submission-src` 同时使用平台正式文件名、正式 `OP_ADD` 和正式 kernel 入口；
-- `operator-descriptors` 当前保留经过验证的内部 `*Fast` 开发类型，不是最终平台描述；
-- 生成工程的输入、输出、属性、动态输入、源文件映射和 include 名称必须与正式契约一致；
-- 不应仅改文件名而不重新构建 `.run`。
+### 5.2 实现
 
-在生成工程中执行：
+Host 计算广播后的输出 shape，并为两个输入生成 stride。被广播的维度
+stride 为 0。Kernel 识别并优化：
 
-```bash
-cd build/Greater
-bash build.sh
-```
+- 连续同形输入；
+- 标量输入；
+- 可连续搬运的重复 run；
+- 通用坐标映射广播。
 
-成功后应产生：
+计算按 4096 元素分块，最多使用 40 个 Vector Core。浮点路径使用
+原生 `Compare(GT)`，因此 NaN 参与比较为 false。int8 先无损转 half
+再比较。int32 不转 float，避免 24 位有效精度造成全位宽整数误判；
+最终版本通过 `max(self, other) == self` 与 `self == other` 两个掩码
+组合出严格大于。
+
+### 5.3 int32 修复记录
+
+早期候选曾尝试用高/低 16 位掩码组合比较，在随机全 32 位 bit pattern
+中出现 621 个错误。该候选未进入正式包。
+
+最终 int32 路径在以下扩展集全部通过，并连续复跑 3 次：
+
+- 边界值笛卡尔积；
+- 257×1021 随机全位宽 bit pattern；
+- 200003 个全相等元素；
+- 左/右标量极值；
+- trailing、interleaved 和 rank-8 广播；
+- 空输出。
+
+### 5.4 验证
+
+- 26 个定向用例；
+- 220 个随机用例；
+- 9 个 int32 扩展用例；
+- 扩展集额外连续复跑 3 次；
+- 共 255 个不同用例全部通过。
+
+本地扩展调用事件计时约 23–25 us，仅用于回归和 A/B。
+
+## 6. IndexAdd
+
+### 6.1 题面覆盖
+
+- self/source dtype：`float32`、`bfloat16`、`float16`、`int32`、`int8`；
+- index dtype：`int32`；
+- rank 1–8；
+- 任意正/负 dim；
+- 重复、乱序和空 index；
+- 未命中输出保持 self；
+- int8/int32 溢出回绕；
+- 题面 index 上限 8000；
+- 非 32B 对齐 inner。
+
+### 6.2 实现
+
+Host 将张量折叠为：
 
 ```text
-build_out/custom_opp_euleros_aarch64.run
+outer = product(shape[:dim])
+dimSize = shape[dim]
+inner = product(shape[dim + 1:])
 ```
 
-五题正式工程已在 CANN 8.5.0 云环境中成功构建过；仓库公开实际打包使用的核心源码和开发 descriptor，但尚未公开由赛事正式描述生成的完整工程，也尚未把工程生成、编译、验证和打包整合成跨机器的一键脚本。
+Kernel 自身从 self 构造完整输出，不依赖 Python wrapper 预复制。每个
+任务负责一组互不重叠的输出行，因此重复 index 不存在跨核写冲突。
 
-## 7. 运行公开用例
+核心优化：
 
-单题测试入口：
+- `inner` 按 256 元素分块；
+- `dim` 每组最多 64 行；
+- 最多 40 核；
+- 行宽与地址满足条件时使用二维 `DataCopyPad` 批量搬入/搬出；
+- int8 使用分批累加路径，保持逐位回绕语义；
+- float16/bfloat16 在需要时使用 float 累加缓冲；
+- index 在核内缓存；
+- 当 index 较大且 inner 有多个分块时，为一个 dim 组预构建命中列表，
+  在多个 inner chunk 间复用；
+- 只有浮点 dimGroups≥8、整数 dimGroups≥16 时才启用命中复用，
+  该门限来自通用压力矩阵 A/B，不绑定某个隐藏 shape；
+- 连续任务分配减少大 shape 下的重复扫描与负载不均衡。
 
-```bash
-cd case_910b/<Operator>
-bash run.sh 1
-```
+当前使用 6 个 TilingKey，组合区分普通/批量 int8、命中复用和单
+inner chunk 快路。
 
-Greater、IndexAdd 和 Transpose 的 wrapper 需要链接相应 opapi 库，可以通过环境变量指定：
+### 6.3 验证
 
-```bash
-export GREATER_FAST_LIB_DIR=/path/to/Greater/build_out/op_api/lib
-export INDEX_ADD_FAST_LIB_DIR=/path/to/IndexAdd/build_out/op_api/lib
-export TRANSPOSE_FAST_LIB_DIR=/path/to/Transpose/build_out/op_api/lib
-```
+- 23 个定向用例；
+- 170 个随机用例；
+- 3 个 seed 共 345 个扩展用例；
+- 合计 538 个用例全部通过；
+- 另有大 index、大 dim、大 inner、outer>1 的压力和性能矩阵。
 
-成功运行至少应满足：
+代表性本地事件计时：
 
-- wheel 从当前源码重新构建；
-- 日志出现 `test pass`；
-- 日志出现 `case1 verify result pass!`；
-- profiler 正常退出；
-- 目标算子实际调度到预期 kernel；
-- 没有复用其他版本留下的 wheel、动态库或缓存。
+| 场景 | 中位数 |
+| --- | ---: |
+| FP16, M=8000, inner=4096 | 721.37 us |
+| FP32, outer=2, M=8000, inner=2048 | 845.98 us |
+| BF16, outer=2, M=8000, inner=2048 | 756.24 us |
+| FP32, M=8000, inner=4096 | 819.30 us |
+| int8, dim=4096, M=1024, inner=2048 | 129.68 us |
 
-## 8. 附加正确性验证
+一个“int8 批量 source 队列 + 无条件命中列表”候选曾在随机 case18
+出现 41 个错误，已经丢弃，未进入正式源码和提交包。
 
-[`extra_correctness.py`](extra_correctness.py) 包含公开用例以外的附加测试：
+## 7. 源码哈希
 
-| 算子 | 主要覆盖 |
-|---|---|
-| Greater | FP16 广播、NaN/Inf、FP32、int32、相等和边界值 |
-| IndexAdd | 重复 index、int8 回绕、FP32 非零维度 |
-| Concat | 负维度、空分片、FP16/FP32 |
-| Transpose | 三维置换、恒等置换、FP16/FP32 |
-| SquareSumV1 | 三种 dtype、负轴/多轴、keepdim、rank 1–5、长归约边界、NaN/Inf/±0 和溢出语义 |
-
-这些测试用于验证 wrapper 的泛化回退和算子语义，不等价于赛事隐藏用例。
-
-## 9. 提交包要求
-
-赛事页面要求每次只提交一道题，并将以下内容放入同一个目录：
-
-- `op_host/`
-- `op_kernel/`
-- 与源码一致的 `custom_*.run`
-
-随后必须使用赛事提供的 `zip_op.sh` 打包：
-
-```bash
-bash zip_op.sh Greater
-```
-
-Greater 的正确 ZIP 结构示例：
-
-```text
-Greater_zip/
-|-- op_host/
-|   |-- CMakeLists.txt
-|   |-- greater.cpp
-|   `-- greater_tiling.h
-|-- op_kernel/
-|   |-- CMakeLists.txt
-|   `-- greater.cpp
-`-- custom_opp_euleros_aarch64.run
-```
-
-截至 2026-07-28，五题均已按这一结构生成最终候选 ZIP。离线审计包含：
-
-- ZIP 可完整读取，且每题只有顶层 `<Operator>_zip/`、`op_host/`、`op_kernel/` 和一个 `custom_opp_euleros_aarch64.run`；
-- Host/Kernel 文件名符合 `Zip_Check` 要求；
-- Host 源码包含正式 `OP_ADD(<Operator>)`；
-- 正式源码中不残留 `Fast`、`ConcatD` 或 `concat_d` 等内部实验名称；
-- 每个包内只有一个非空 `.run`，并记录候选包的 SHA-256 以便后续上传核对。
-
-本轮候选包校验值：
+### 7.1 Concat
 
 | 文件 | SHA-256 |
-|---|---|
-| `Concat.zip` | `82e17ebf1f062c42f61d64f0788b7c2ed6a2633ff26a9abd44fae5b6da7fe814` |
-| `Greater.zip` | `6c61f94e838843b052dd72e4cd5622cf309f5d3811370e15a6a15d2353df2539` |
-| `IndexAdd.zip` | `d2b087093f5a7e3bc1559cadacd703f7bf3592fbd1a5a5dcf72280a2d2ac2a5f` |
-| `SquareSumV1.zip` | `af9ae474bdedb0b5a7b55d39fc0de9a3bd448df39a01b08926304513412e642b` |
-| `Transpose.zip` | `0b88b825e7ee6e5cb598e5c3eb4638d4f652a4a0eb32671087a10a4aa3ff57e8` |
+| --- | --- |
+| `op_host/CMakeLists.txt` | `d1b100115b8c34135ccdfc54f91597847a7823ec76cdca995e2b80f5c6092cd2` |
+| `op_host/concat.cpp` | `cd98d736052c05987bb3ebc9fcb32e0a43694e8ed35961cfba45772e384741ce` |
+| `op_host/concat_tiling.h` | `5b07ef0615f269c0ea951977916152748bc16fef7d652c276619d287620efb9a` |
+| `op_kernel/CMakeLists.txt` | `10b4df9e22540a42e443602357cf8a7bfa71b4c9c7198fa7da6b3f4343b00118` |
+| `op_kernel/concat.cpp` | `6ff66e8845a1dd60f148536bd3770677a1627d8a9d9d89a9371b8e0ab86353d8` |
 
-最终候选包仍应逐题上传平台，以平台 `Zip_Check`、精度验证和性能结果作为最终结论。本仓库不提交 `.run`、ZIP、wheel、profile 数据库和构建缓存；二进制提交包必须在 CANN 8.5.0 目标环境中由对应源码重新构建。
+### 7.2 Greater
 
-## 10. 已知问题
+| 文件 | SHA-256 |
+| --- | --- |
+| `op_host/CMakeLists.txt` | `d1b100115b8c34135ccdfc54f91597847a7823ec76cdca995e2b80f5c6092cd2` |
+| `op_host/greater.cpp` | `1f1b69f6d65128d1c7746a38af2ceb9df501f2f69c95eefa486ae27d60b62a52` |
+| `op_host/greater_tiling.h` | `964b0256aef614b62e285afbffd6c967507276aac52493cd0047121b68f93c6b` |
+| `op_kernel/CMakeLists.txt` | `de2557844234c8ca7d5952ec124d4c53f0196d9066d5e172f86f62808fb776a6` |
+| `op_kernel/greater.cpp` | `0f2aaab2f2a0d804281a177bed09d915bd329d55b402c5fa6a596aef8380c5e0` |
 
-1. Concat 正式动态输入契约已经构建和打包，但尚未完成平台公开 harness 的最终功能与性能闭环。
-2. SquareSumV1 的生成式 ACLNN 验证封装会在进入 tiling 前拒绝零长度 `IntArray`，因此空 `axis` 只能以等价的“显式全轴”做端到端测试；Host 已实现空轴全维归约语义，但仍需平台用例确认该属性的实际注入方式。
-3. 公开用例通过以及离线包审计均不保证隐藏用例泛化、平台上传验收或榜单成绩。
-4. 五题尚未形成跨机器的一键生成、编译、安装、测试和打包流水线。
-5. 仓库当前未声明开源许可证；正式对外复用前需要补充合适的 LICENSE。
+### 7.3 IndexAdd
 
-## 11. 安全与仓库卫生
+| 文件 | SHA-256 |
+| --- | --- |
+| `op_host/CMakeLists.txt` | `d1b100115b8c34135ccdfc54f91597847a7823ec76cdca995e2b80f5c6092cd2` |
+| `op_host/index_add.cpp` | `33e4eb4c27f633fcc8031a1ef4e353ff1e98f86ece32d666ff0e424f20831476` |
+| `op_host/index_add_tiling.h` | `85d66f140d24855b97d281a8b6f715b81ead115fab7e2aa976a57614616ccb6b` |
+| `op_kernel/CMakeLists.txt` | `fb5e4b00af77bb885d29dff3faa1f1c094e79f19f6a366eca0d381a209819627` |
+| `op_kernel/index_add.cpp` | `e9ee4fdd157ef6a92ae843eef49eb8179a558885695dc0bdcbfcece82bca7aa8` |
 
-以下内容不会进入 Git：
+## 8. 云端状态
 
-- SSH 私钥、`.pem`、`.key`；
-- 云账号、令牌和本地 `.env`；
-- `.run`、`.so`、wheel、目标文件；
-- `PROF*`、数据库和 profiler 日志；
-- 本地同步、解压和文档检查临时目录；
-- 比赛代金券、个人联系方式和其他提交材料。
+云环境：
 
-提交前建议执行：
+```text
+ModelArts: my_env2
+NPU: Ascend 910B4
+CANN: /home/ma-user/Ascend/cann-8.5.0
+工作根目录: /home/ma-user/work/s9
+```
+
+最终实验：
+
+```text
+/home/ma-user/work/s9/experiments/concat_dynamic_rows_20260728_1417
+/home/ma-user/work/s9/experiments/greater_int32_masks_20260728_1439
+/home/ma-user/work/s9/experiments/indexadd_hitreuse_20260728_1514
+```
+
+云端发布包：
+
+```text
+/home/ma-user/work/s9/releases/concat_20260728_1446/Concat.zip
+/home/ma-user/work/s9/releases/greater_20260728_1511/Greater.zip
+/home/ma-user/work/s9/releases/indexadd_20260728_1622/IndexAdd.zip
+```
+
+2026-07-28 16:34 已重新读取三个云端 ZIP，并与本地
+`提交相关材料/` 对比：文件大小、ZIP SHA-256、包内每个源码 SHA-256
+和 `.run` SHA-256 全部一致。
+
+所有云端命令通过本地 `ssh_visible.ps1` 执行，并记录在：
+
+```text
+/home/ma-user/work/s9/codex-visible-terminal.log
+```
+
+## 9. 平台已知结果与解释
+
+用户此前提供的结果：
+
+| 题目 | Case1 | Case2 | Case3 | Case4 | Case5 | 总和 |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| Concat | 15.7005 | 46.871 | 123.5425 | 116.7625 | 847.587 | 1150.4635 |
+| Greater | 5.312 | 39463.772 | 2261.36 | 94.512 | 210.032 | 42034.988 |
+| IndexAdd | 9.7805 | 41352.976 | 90.9915 | 2564.231 | 80160.552 | 124178.531 |
+
+这些结果对应前三题本轮最终 ZIP 之前的版本，不能用来评价本 README
+记录的新包。新包上传后必须记录：
+
+- 上传时间；
+- ZIP SHA-256；
+- Case1–Case5 Pass/Fail；
+- 每个 Case 的耗时；
+- `prof_sum`；
+- 排名变化；
+- 若失败，保存平台结果文本，不猜隐藏数据。
+
+## 10. 下一次工作如何接续
+
+### 10.1 先收平台反馈
+
+按顺序上传：
+
+1. `Concat.zip`
+2. `Greater.zip`
+3. `IndexAdd.zip`
+
+每题上传后先确认五个 Case 全 Pass，再比较耗时。不要同时修改三个
+算子，否则无法定位性能变化。
+
+### 10.2 复核本地工作区
 
 ```bash
 git status --short
+git log -1 --oneline
 git diff --check
-git ls-files | grep -Ei '\.(pem|key|run|so|whl)$'
 ```
 
-## 12. 后续计划
+正式源码只从 `submission-src/` 取。不要从 `candidates/`、
+`current-submission-extracted-*` 或历史实验目录覆盖正式版本。
 
-- 逐题上传最终候选 ZIP，记录 `Zip_Check`、精度和性能结果；
-- 完成 Concat 正式动态输入契约的公开用例闭环；
-- 根据 SquareSumV1 平台实际 Case1–Case5 形状继续做定向性能 A/B；
-- 扩展五题隐藏形状、dtype、广播和非连续布局覆盖；
-- 增加统一的一键构建、测试、profile 和提交包脚本；
-- 按赛事要求准备 GitCode 开源 PR。
+### 10.3 云端执行纪律
 
-## 13. 免责声明
+显式加载 CANN 8.5.0：
 
-仓库中的性能数据是本地云实例上的工程测量，仅用于优化决策。赛事平台的最终成绩由官方隐藏用例、精度检查和计时环境决定。
+```bash
+source /home/ma-user/Ascend/cann-8.5.0/set_env.sh
+```
+
+登录欢迎信息可能仍显示镜像预置的旧 CANN 字样，不能据此判断实际构建
+版本。构建、安装和运行前都要核对环境变量指向 8.5.0。
+
+每轮实验：
+
+1. 从最终实验复制到带时间戳的新目录；
+2. 保存旧源码哈希；
+3. 只改一个可检验假设；
+4. 重建 `.run` 并安装；
+5. 先定向，再随机，再扩展，再压力；
+6. 做同形状 A/B；
+7. 只有正确且有稳定收益才提升为正式源码；
+8. 独立无缓存重建后再打包。
+
+### 10.4 后续题目
+
+下一题为 `Transpose`。2026-07-28 已完成：
+
+- 重读官方题面：float32/float16/int32/int8，rank 最高按现有契约 6，
+  任意合法 dims，N/N2 至 10000，N3–N5 至 1000；
+- 重读两轮专家意见；
+- 核对 CANN 8.5.0 普通与增强 Transpose API；
+- 确认增强 API 只适合受约束的 NCHW↔NHWC/二维折叠块，不能替代通用
+  回退；
+- 创建本地隔离候选目录
+  `candidates/transpose_enhanced_20260728_1632`，但尚未修改正式源码。
+
+恢复时从该审查结论继续，不要把未验证候选提交到平台。
+
+## 11. 安全与仓库卫生
+
+禁止提交：
+
+- SSH 私钥、云账号、令牌和 `.env`；
+- `.run`、`.so`、wheel、目标文件；
+- ZIP、profiler 数据库和构建缓存；
+- 个人材料、代金券记录和联系方式。
+
+提交前检查：
+
+```bash
+git diff --check
+git ls-files | grep -Ei '\.(pem|key|run|so|whl|zip)$'
+```
+
+## 12. 结论边界
+
+当前能够确认的是：前三题的正式源码、云端构建产物、本地提交包和验证
+证据已形成可复现闭环，并已逐哈希对齐。
+
+当前不能确认的是：新包在官方隐藏 Case 上的最终耗时、排名和是否已经
+进入奖励区间。所有平台结论必须等待用户回传五个 Case 的实际结果。
