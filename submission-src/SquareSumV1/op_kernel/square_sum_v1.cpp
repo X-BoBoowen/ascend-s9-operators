@@ -5,6 +5,18 @@ constexpr uint32_t MAX_RANK = 5;
 constexpr uint32_t NORMAL_CHUNK = 8192;
 constexpr uint32_t LONG_CHUNK = 16384;
 
+// Reductions of at least this many elements use the pipelined
+// traversal: double-buffered staging plus a vector accumulator, so
+// the scalar unit is read once instead of once per chunk. Below it,
+// a reduction fits in a single chunk and the pipelining has nothing
+// to overlap, while the extra Add and the accumulator setup/fold
+// are pure additions -- those go through the direct traversal. The
+// grouped path (fastPath 3) calls the reduction once per group and
+// is what makes the short case worth a separate path at all.
+// Retune against measured fastPath-3 numbers; a value of 0 forces
+// the pipelined path everywhere, one above CHUNK disables it.
+constexpr uint64_t PIPELINED_REDUCE_MIN_ELEMENTS = 4096;
+
 union FloatBits {
     float value;
     uint32_t bits;
@@ -76,6 +88,10 @@ __aicore__ inline bfloat16_t OutputFromFloat<bfloat16_t>(
 template <typename T, uint32_t CHUNK>
 class KernelSquareSumV1 {
 public:
+    // inputBuffer_ is split into two staging halves for the
+    // contiguous reduction, so a single DMA covers HALF_CHUNK.
+    static constexpr uint32_t HALF_CHUNK = CHUNK / 2U;
+
     __aicore__ inline KernelSquareSumV1() {}
 
     __aicore__ inline void Init(
@@ -143,6 +159,13 @@ public:
         pipe_.InitBuffer(sumBuffer_, 32);
         mte2ToVEvent_ = static_cast<event_t>(
             pipe_.FetchEventID(AscendC::HardEvent::MTE2_V));
+        // FetchEventID returns the same id for a given hard event,
+        // so the ping-pong pair must come from AllocEventID to be
+        // distinct from the ids above.
+        mte2ToVEventAlt_ = static_cast<event_t>(
+            pipe_.AllocEventID<AscendC::HardEvent::MTE2_V>());
+        vToMte2EventAlt_ = static_cast<event_t>(
+            pipe_.AllocEventID<AscendC::HardEvent::V_MTE2>());
         vToSEvent_ = static_cast<event_t>(
             pipe_.FetchEventID(AscendC::HardEvent::V_S));
         vToMte2Event_ = static_cast<event_t>(
@@ -1812,7 +1835,113 @@ private:
         }
     }
 
+    // Both traversals below compute the same sum of squares over
+    // [inputStart, inputStart + elementCount) and differ only in
+    // how they move data and where partial sums live.
     __aicore__ inline float ReduceContiguous(
+        const uint64_t inputStart,
+        const uint64_t elementCount)
+    {
+        if (elementCount < PIPELINED_REDUCE_MIN_ELEMENTS) {
+            return ReduceContiguousDirect(inputStart, elementCount);
+        }
+        return ReduceContiguousPipelined(inputStart, elementCount);
+    }
+
+    __aicore__ inline float ReduceContiguousPipelined(
+        const uint64_t inputStart,
+        const uint64_t elementCount)
+    {
+        AscendC::LocalTensor<T> inputLocal =
+            inputBuffer_.Get<T>();
+        AscendC::LocalTensor<float> floatLocal =
+            floatBuffer_.Get<float>();
+        AscendC::LocalTensor<float> workLocal =
+            reduceWorkBuffer_.Get<float>();
+        AscendC::LocalTensor<float> sumLocal =
+            sumBuffer_.Get<float>();
+
+        // The two halves of inputBuffer_ ping-pong so that the
+        // MTE2 fetch of chunk n+1 overlaps the vector work of
+        // chunk n. Partial sums stay in a float vector for the
+        // whole traversal; the scalar unit is touched once, after
+        // the loop, because a per-chunk V_S round trip stalls
+        // MTE2 issue and that dominates at these sizes.
+        AscendC::LocalTensor<T> buffers[2] = {
+            inputLocal[0], inputLocal[HALF_CHUNK]};
+        const event_t loadEvents[2] = {
+            mte2ToVEvent_, mte2ToVEventAlt_};
+        const event_t freeEvents[2] = {
+            vToMte2Event_, vToMte2EventAlt_};
+
+        // The accumulator only needs as many lanes as the widest
+        // chunk actually uses. Sizing it to HALF_CHUNK regardless
+        // would make the Duplicate and the final ReduceSum cost
+        // the same for a 64-element reduction as for a full one,
+        // which is a large loss on the short repeated calls that
+        // the grouped path (fastPath 3) makes.
+        const uint32_t accumWidth = PadToBlockFloat(
+            static_cast<uint32_t>(
+                elementCount < HALF_CHUNK ? elementCount
+                                          : HALF_CHUNK));
+        AscendC::Duplicate(workLocal, 0.0f, accumWidth);
+
+        const uint64_t chunks =
+            (elementCount + HALF_CHUNK - 1U) / HALF_CHUNK;
+        uint32_t slot = 0;
+        IssueChunkLoad(buffers[0], inputStart, 0, elementCount,
+                       loadEvents[0]);
+
+        for (uint64_t index = 0; index < chunks; ++index) {
+            const uint64_t offset = index * HALF_CHUNK;
+            const uint32_t current = static_cast<uint32_t>(
+                elementCount - offset < HALF_CHUNK
+                    ? elementCount - offset
+                    : HALF_CHUNK);
+            const uint32_t padded = PadToBlock(current);
+            const uint32_t next = slot ^ 1U;
+
+            AscendC::WaitFlag<AscendC::HardEvent::MTE2_V>(
+                loadEvents[slot]);
+            if (index + 1U < chunks) {
+                // Iteration 0 prefetches into a half nobody has
+                // consumed yet, so there is no V_MTE2 to wait on.
+                if (index > 0) {
+                    AscendC::WaitFlag<AscendC::HardEvent::V_MTE2>(
+                        freeEvents[next]);
+                }
+                IssueChunkLoad(buffers[next], inputStart,
+                               offset + HALF_CHUNK, elementCount,
+                               loadEvents[next]);
+            }
+
+            AccumulateSquares(buffers[slot], floatLocal, workLocal,
+                              current, padded);
+
+            if (index + 2U < chunks) {
+                AscendC::SetFlag<AscendC::HardEvent::V_MTE2>(
+                    freeEvents[slot]);
+            }
+            slot = next;
+        }
+
+        // The staging halves are dead now, so the larger of them
+        // serves as ReduceSum scratch; floatBuffer_ is only 32B on
+        // the float LONG_CHUNK instantiation.
+        AscendC::LocalTensor<float> foldWork =
+            inputBuffer_.Get<float>();
+        AscendC::ReduceSum(
+            sumLocal, workLocal, foldWork, accumWidth);
+        AscendC::SetFlag<AscendC::HardEvent::V_S>(vToSEvent_);
+        AscendC::WaitFlag<AscendC::HardEvent::V_S>(vToSEvent_);
+        return sumLocal.GetValue(0);
+    }
+
+    // Single-buffered traversal reducing each chunk to a scalar as
+    // it lands. Uses the full CHUNK staging area, since there is no
+    // second half to reserve, so a sub-threshold reduction is
+    // always one DMA and one ReduceSum.
+    __aicore__ inline float ReduceContiguousDirect(
         const uint64_t inputStart,
         const uint64_t elementCount)
     {
@@ -1826,18 +1955,13 @@ private:
             sumBuffer_.Get<float>();
         float total = 0.0f;
 
-        for (uint64_t offset = 0;
-             offset < elementCount;
-              offset += CHUNK) {
+        for (uint64_t offset = 0; offset < elementCount;
+             offset += CHUNK) {
             const uint32_t current = static_cast<uint32_t>(
                 elementCount - offset < CHUNK
                     ? elementCount - offset
                     : CHUNK);
-            const uint32_t elementsPerBlock =
-                32U / sizeof(T);
-            const uint32_t padded =
-                (current + elementsPerBlock - 1U) /
-                elementsPerBlock * elementsPerBlock;
+            const uint32_t padded = PadToBlock(current);
 
             AscendC::DataCopyExtParams copyParams;
             copyParams.blockCount = 1;
@@ -1847,82 +1971,140 @@ private:
             AscendC::DataCopyPadExtParams<T> padParams;
             padParams.isPad = padded != current;
             padParams.leftPadding = 0;
-            padParams.rightPadding = static_cast<uint8_t>(
-                padded - current);
+            padParams.rightPadding =
+                static_cast<uint8_t>(padded - current);
             const T zero = {};
             padParams.paddingValue = zero;
             AscendC::DataCopyPad(
-                inputLocal,
-                inputGm_[inputStart + offset],
-                copyParams,
-                padParams);
+                inputLocal, inputGm_[inputStart + offset],
+                copyParams, padParams);
             AscendC::SetFlag<AscendC::HardEvent::MTE2_V>(
                 mte2ToVEvent_);
             AscendC::WaitFlag<AscendC::HardEvent::MTE2_V>(
                 mte2ToVEvent_);
 
+            SquareIntoFloat(inputLocal, floatLocal, padded);
             if constexpr (std::is_same<T, float>::value) {
-                AscendC::Mul(
-                    inputLocal,
-                    inputLocal,
-                    inputLocal,
-                    padded);
                 AscendC::ReduceSum(
-                    sumLocal,
-                    inputLocal,
-                    workLocal,
-                    current);
-            } else if constexpr (
-                std::is_same<T, half>::value) {
-                AscendC::Mul(
-                    inputLocal,
-                    inputLocal,
-                    inputLocal,
-                    padded);
-                AscendC::Cast(
-                    floatLocal,
-                    inputLocal,
-                    AscendC::RoundMode::CAST_NONE,
-                    padded);
-                AscendC::ReduceSum(
-                    sumLocal,
-                    floatLocal,
-                    workLocal,
-                    current);
+                    sumLocal, inputLocal, workLocal, current);
             } else {
-                AscendC::Cast(
-                    floatLocal,
-                    inputLocal,
-                    AscendC::RoundMode::CAST_NONE,
-                    padded);
-                AscendC::Mul(
-                    floatLocal,
-                    floatLocal,
-                    floatLocal,
-                    padded);
-                AscendC::Cast(
-                    inputLocal,
-                    floatLocal,
-                    AscendC::RoundMode::CAST_RINT,
-                    padded);
-                AscendC::Cast(
-                    floatLocal,
-                    inputLocal,
-                    AscendC::RoundMode::CAST_NONE,
-                    padded);
                 AscendC::ReduceSum(
-                    sumLocal,
-                    floatLocal,
-                    workLocal,
-                    current);
+                    sumLocal, floatLocal, workLocal, current);
             }
-            AscendC::SetFlag<AscendC::HardEvent::V_S>(
-                vToSEvent_);
-            AscendC::WaitFlag<AscendC::HardEvent::V_S>(
-                vToSEvent_);
+            AscendC::SetFlag<AscendC::HardEvent::V_S>(vToSEvent_);
+            AscendC::WaitFlag<AscendC::HardEvent::V_S>(vToSEvent_);
             total += sumLocal.GetValue(0);
+
+            if (offset + CHUNK < elementCount) {
+                // inputLocal was overwritten by the squaring above
+                // and is refilled next iteration; on the float
+                // instantiation that write is the vector op the
+                // next DMA must not race.
+                AscendC::SetFlag<AscendC::HardEvent::V_MTE2>(
+                    vToMte2Event_);
+                AscendC::WaitFlag<AscendC::HardEvent::V_MTE2>(
+                    vToMte2Event_);
+            }
         }
         return total;
+    }
+
+    // Rounds up to a 32B block of floats, which is what the
+    // accumulator and the final fold are sized in. Distinct from
+    // PadToBlock, which is in units of T.
+    __aicore__ inline uint32_t PadToBlockFloat(
+        const uint32_t count) const
+    {
+        constexpr uint32_t floatsPerBlock = 32U / sizeof(float);
+        return (count + floatsPerBlock - 1U) / floatsPerBlock *
+               floatsPerBlock;
+    }
+
+    __aicore__ inline uint32_t PadToBlock(
+        const uint32_t count) const
+    {
+        const uint32_t elementsPerBlock = 32U / sizeof(T);
+        return (count + elementsPerBlock - 1U) /
+               elementsPerBlock * elementsPerBlock;
+    }
+
+    __aicore__ inline void IssueChunkLoad(
+        const AscendC::LocalTensor<T>& dst,
+        const uint64_t inputStart,
+        const uint64_t offset,
+        const uint64_t elementCount,
+        const event_t loadEvent)
+    {
+        const uint32_t current = static_cast<uint32_t>(
+            elementCount - offset < HALF_CHUNK
+                ? elementCount - offset
+                : HALF_CHUNK);
+        AscendC::DataCopyExtParams copyParams;
+        copyParams.blockCount = 1;
+        copyParams.blockLen = current * sizeof(T);
+        copyParams.srcStride = 0;
+        copyParams.dstStride = 0;
+        AscendC::DataCopyPadExtParams<T> padParams;
+        padParams.isPad = PadToBlock(current) != current;
+        padParams.leftPadding = 0;
+        padParams.rightPadding = static_cast<uint8_t>(
+            PadToBlock(current) - current);
+        const T zero = {};
+        padParams.paddingValue = zero;
+        AscendC::DataCopyPad(
+            dst, inputGm_[inputStart + offset], copyParams,
+            padParams);
+        AscendC::SetFlag<AscendC::HardEvent::MTE2_V>(loadEvent);
+    }
+
+    // Squares `padded` elements of `src` in place. The result is
+    // left in `src` for float and in `floatLocal` otherwise. The
+    // bf16 round trip through T reproduces the reference operator's
+    // intermediate rounding, so it must stay even though it looks
+    // redundant next to the float path.
+    __aicore__ inline void SquareIntoFloat(
+        const AscendC::LocalTensor<T>& src,
+        const AscendC::LocalTensor<float>& floatLocal,
+        const uint32_t padded)
+    {
+        if constexpr (std::is_same<T, float>::value) {
+            AscendC::Mul(src, src, src, padded);
+        } else if constexpr (std::is_same<T, half>::value) {
+            AscendC::Mul(src, src, src, padded);
+            AscendC::Cast(
+                floatLocal, src,
+                AscendC::RoundMode::CAST_NONE, padded);
+        } else {
+            AscendC::Cast(
+                floatLocal, src,
+                AscendC::RoundMode::CAST_NONE, padded);
+            AscendC::Mul(
+                floatLocal, floatLocal, floatLocal, padded);
+            AscendC::Cast(
+                src, floatLocal,
+                AscendC::RoundMode::CAST_RINT, padded);
+            AscendC::Cast(
+                floatLocal, src,
+                AscendC::RoundMode::CAST_NONE, padded);
+        }
+    }
+
+    // Adds the squares of the first `current` elements of `src`
+    // into `accum`. Only `current` lanes are touched, so the
+    // block padding beyond the tail never reaches the sum.
+    __aicore__ inline void AccumulateSquares(
+        const AscendC::LocalTensor<T>& src,
+        const AscendC::LocalTensor<float>& floatLocal,
+        const AscendC::LocalTensor<float>& accum,
+        const uint32_t current,
+        const uint32_t padded)
+    {
+        SquareIntoFloat(src, floatLocal, padded);
+        if constexpr (std::is_same<T, float>::value) {
+            AscendC::Add(accum, accum, src, current);
+        } else {
+            AscendC::Add(accum, accum, floatLocal, current);
+        }
     }
 
     __aicore__ inline uint64_t BaseInputOffset(
@@ -1988,6 +2170,8 @@ private:
     event_t sToMte3Event_;
     event_t mte3ToSEvent_;
     event_t mte2ToVEvent_;
+    event_t mte2ToVEventAlt_;
+    event_t vToMte2EventAlt_;
     event_t vToSEvent_;
     event_t vToMte2Event_;
     event_t vToMte3Event_;

@@ -276,7 +276,11 @@ static ge::graphStatus TilingFunc(gert::TilingContext* context)
     constexpr uint64_t ATOMIC_REDUCE_MAX_OUTPUTS = 8;
     constexpr uint64_t WORKSPACE_REDUCE_INPUT_THRESHOLD = 1U << 18U;
     constexpr uint64_t WORKSPACE_REDUCE_MIN_ELEMENTS = 2048;
-    constexpr uint64_t WORKSPACE_LAST_MAX_OUTPUTS = 8;
+    // Splitting the reduce axis is what lets a shape with fewer
+    // outputs than cores still fill the device. The old bound of 8
+    // left 9..39 outputs stranded on one core each while the rest
+    // of the AIVs idled, so it tracks MAX_BLOCK_DIM instead.
+    constexpr uint64_t WORKSPACE_LAST_MAX_OUTPUTS = MAX_BLOCK_DIM;
     constexpr uint64_t WORKSPACE_MIDDLE_MAX_OUTPUTS = 1024;
     constexpr uint64_t LONG_CONTIGUOUS_THRESHOLD = 8192;
     const bool atomicReduce =
@@ -288,8 +292,11 @@ static ge::graphStatus TilingFunc(gert::TilingContext* context)
     const bool workspaceReduce =
         inputElements >= WORKSPACE_REDUCE_INPUT_THRESHOLD &&
         reduceElements >= WORKSPACE_REDUCE_MIN_ELEMENTS &&
+        // float shapes small enough for the atomic path took it
+        // above; the rest still need the reduce axis split, so the
+        // dtype no longer excludes them here.
         ((fastPath == 1 &&
-          inputDesc->GetDataType() != ge::DT_FLOAT &&
+          !atomicReduce &&
           outputElements <= WORKSPACE_LAST_MAX_OUTPUTS) ||
          (fastPath == 2 &&
           outputElements <= WORKSPACE_MIDDLE_MAX_OUTPUTS));
