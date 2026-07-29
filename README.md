@@ -12,10 +12,10 @@
 - Git 仓库保存源码、测试与文档，不保存 `.run`、ZIP、wheel 和
   profiler 数据库。
 
-> 状态时间：2026-07-28 17:10（Asia/Shanghai）
+> 状态时间：2026-07-29 19:34（Asia/Shanghai）
 >
-> 当前阶段：`Concat`、`Greater`、`IndexAdd`、`Transpose` 已完成
-> 本轮工程闭环并分别生成待测 ZIP；下一题为 `SquareSumV1`。
+> 当前阶段：五道题均已完成本轮工程闭环并分别生成待测 ZIP；
+> `SquareSumV1` 已完成跨核归约优化、BF16 语义修复和正式构建复验。
 
 ## 1. 当前状态
 
@@ -25,7 +25,7 @@
 | Greater | 本轮完成 | 26 定向 + 220 随机 + 9 个 int32 扩展；扩展集连续复跑 3 次 | 已生成并审计 | 新包待上传 |
 | IndexAdd | 本轮完成 | 23 定向 + 170 随机 + 345 扩展 = 538 | 已生成并审计 | 新包已交用户评测 |
 | Transpose | 本轮完成 | 48 定向 + 200 随机 + 152 扩展 + 84 边界 = 484 | 已生成并审计 | 新包待上传 |
-| SquareSumV1 | 已有通用正确版本 | 46 定向 + 150 随机 + 726 扩展 = 922 | 旧候选保留 | 后续继续 |
+| SquareSumV1 | 本轮完成 | 922 全量 + 28 专项 + 4 组 BF16 逐位语义 | 已生成并审计 | 新包待上传 |
 
 这里的“本轮完成”表示：
 
@@ -36,10 +36,10 @@
 5. ZIP 结构、文件权限、源码哈希和 `.run` 哈希已审计；
 6. 本地 ZIP 与云端发布 ZIP 完全一致。
 
-它不表示已经获得新的榜单成绩。四题的新包必须逐题上传，平台
+它不表示已经获得新的榜单成绩。五题的新包必须逐题上传，平台
 Case1–Case5 全 Pass 后才能确认隐藏用例闭环。
 
-## 2. 本轮四题的提交清单
+## 2. 本轮五题的提交清单
 
 正式 ZIP 位于本地仓库外：
 
@@ -48,7 +48,8 @@ D:\29722\Desktop\GCC\提交相关材料\
 |-- Concat.zip
 |-- Greater.zip
 |-- IndexAdd.zip
-`-- Transpose.zip
+|-- Transpose.zip
+`-- SquareSumV1.zip
 ```
 
 | 文件 | 大小 | SHA-256 |
@@ -57,6 +58,7 @@ D:\29722\Desktop\GCC\提交相关材料\
 | `Greater.zip` | 398168 B | `316797810d06b57d18c898d1fe449c1b0b51565c6a842845dded75524f7f868d` |
 | `IndexAdd.zip` | 417920 B | `cf8c08a60d3b356686a07e136766dd06128afa87dccf67d9c9940330843d990b` |
 | `Transpose.zip` | 410044 B | `b564a3724999cd2f3ef1b2ebf8c6e75c8c72778ffaa659125883130ac1d541cc` |
+| `SquareSumV1.zip` | 453473 B | `83e574b46752ec089d42fdfa1ddce04b387e1c14781c04bd9a76a48314261ad1` |
 
 包内 `.run`：
 
@@ -66,8 +68,9 @@ D:\29722\Desktop\GCC\提交相关材料\
 | Greater | `d8ab6f81aa1eaa775cbe69078db09901037ccad667216697371475a42dbb4298` |
 | IndexAdd | `58a5be8bbbc8db62708973fea21bd6630e1d938ae9c8a4ad28132f3014ce679d` |
 | Transpose | `8685eaffd9787893a659c9b1b7424aa88c2881d10921c8246fda7ce4d717709e` |
+| SquareSumV1 | `b8748b428673562c0ef25d7c1c9df7a26c2a5ca30988afdffa8f284aa15fc46e` |
 
-四个 ZIP 均只有一个顶层 `<Operator>_zip/`，包含 `op_host/`、
+五个 ZIP 均只有一个顶层 `<Operator>_zip/`，包含 `op_host/`、
 `op_kernel/` 和一个非空 `custom_opp_euleros_aarch64.run`。
 `IndexAdd` 的 `.run` 在 ZIP 中保持 `0750`，其余三个为 `0755`。
 
@@ -80,12 +83,13 @@ D:\29722\Desktop\GCC\提交相关材料\
 |   |-- Greater/            # 本轮正式源码
 |   |-- IndexAdd/           # 本轮正式源码
 |   |-- Transpose/          # 上一轮稳定源码
-|   `-- SquareSumV1/        # 上一轮稳定源码
+|   `-- SquareSumV1/        # 本轮正式源码
 |-- validation/
 |   |-- Concat/             # 定向、随机、profile 与扩展封装
 |   |-- Greater/
 |   |-- IndexAdd/
-|   `-- Transpose/
+|   |-- Transpose/
+|   `-- SquareSumV1/
 |-- case_910b/              # 官方公开 case 与运行脚本
 |-- operator-descriptors/   # 开发期工程描述
 |-- EXPERT_OPINION_SYNTHESIS_20260727.md
@@ -95,7 +99,7 @@ D:\29722\Desktop\GCC\提交相关材料\
 ```
 
 正式源码入口始终是 `submission-src/<Operator>/`。包内源码已与这里
-逐文件计算 SHA-256，四题全部匹配。
+逐文件计算 SHA-256，五题全部匹配。
 
 ## 4. Concat
 
@@ -313,9 +317,89 @@ Tiling。非 fp16、非对齐尾块和不能安全折叠的任意排列均保留
 
 因此增强候选没有进入正式源码、Git 提交或发布 ZIP。
 
-## 8. 源码哈希
+## 8. SquareSumV1
 
-### 8.1 Concat
+### 8.1 题面覆盖
+
+- dtype：`float16`、`bfloat16`、`float32`；
+- rank 1–5；
+- 单轴、多轴、负轴和任意合法轴组合；
+- `keep_dims=true/false`；
+- `N`、`N2` 至 10000，`N3` 至 1000，`N4` 至 200；
+- 非 32B 对齐、单位维和标量输出；
+- 语义严格对应
+  `torch.sum(torch.square(x), dim=axis, keepdim=keep_dims)`。
+
+### 8.2 实现
+
+Host 将轴集合规范化，并识别连续末轴、连续前缀/中间轴和通用稀疏轴。
+Kernel 保留通用坐标映射回退，同时为常见布局提供连续向量归约、分组
+归约和按行树形归约。
+
+大输入、小输出是旧版的主要瓶颈。当前根据数据类型和输出规模选择三种
+通用模式：
+
+- 普通模式：按输出分核，适合输出数充足或归约较短的场景；
+- FP32 原子模式：当输出不超过 8 且归约足够长时，40 核分别计算局部
+  和，再原子累加输出；
+- 工作区模式：FP16/BF16 的长连续归约，以及输出不超过 1024 的长
+  前缀/中间归约，40 核写入 FP32 局部和，跨核同步后由 0 号核收尾。
+
+工作区大小同时包含 CANN 系统工作区与用户局部和，Kernel 通过
+`GetUserWorkspace` 获取正确偏移，避免早期实验中出现的 DDR 越界。
+归约长度超过 8192 时切换到更大的 UB 配置；两个 TilingKey 均有
+8192/8193 边界回归。
+
+数值语义方面：
+
+- FP16 先在 FP16 中平方，再转 FP32 累加，保留 FP16 平方溢出；
+- BF16 先转 FP32 完成乘法，再以 `CAST_RINT` 回写 BF16，随后转
+  FP32 累加，等价于先执行 BF16 `torch.square`；
+- FP32 全程使用 FP32；原子模式只用于 FP32，避免半精度原子写入
+  的硬件兼容问题。
+
+### 8.3 正确性验证
+
+- 46 个定向用例；
+- 150 个固定 seed 随机用例；
+- 726 个边界、布局和大维度扩展用例；
+- 合计 922 个用例在候选构建和正式目录干净构建上各完整通过一次；
+- 10 个工作区模式探针；
+- 10 个 TilingKey/回退边界探针；
+- 4 个 FP32 原子稳定性探针；
+- 4 个 BF16 严格逐位语义探针。
+
+BF16 专项包含曾经能暴露错误的
+`63 × 0.10009765625`，修复前输出 `0.6328125`，PyTorch 期望
+`0.62890625`；正式版本逐位一致。
+
+### 8.4 性能
+
+以下为相同扩展调用、相同输入的 NPU Event 中位数，仅用于版本 A/B：
+
+| 场景 | 初始版本 | 正式版本 | 提升 |
+| --- | ---: | ---: | ---: |
+| FP16, shape=(10000,64), axis=0 | 218.1 us | 27.524 us | 7.9× |
+| FP32, shape=(10000,64), axis=0 | 202.7 us | 27.142 us | 7.5× |
+| FP16, shape=(200,1000,64), axis=(0,1) | 4321.5 us | 79.189 us | 54.6× |
+| FP32, shape=(200,1000,64), axis=(0,1) | 4015.3 us | 47.647 us | 84.3× |
+| FP16, shape=(200,1000,64), 全轴 | 1109.0 us | 38.273 us | 29.0× |
+| FP32, shape=(200,1000,64), 全轴 | 1049.0 us | 35.246 us | 29.8× |
+
+设备侧 profiling 的稳定区间中位数：
+
+| 场景 | SquareSumV1 kernel |
+| --- | ---: |
+| 公开样例 `(123,31)` FP16 | 6.440 us |
+| 大前缀归约 BF16 | 76.952 us |
+| 大全轴归约 BF16 | 44.551 us |
+| 大全轴归约 FP32 | 32.251 us |
+
+平台隐藏形状未知，因此这些数据只证明同形状优化有效，不作为榜单成绩。
+
+## 9. 源码哈希
+
+### 9.1 Concat
 
 | 文件 | SHA-256 |
 | --- | --- |
@@ -325,7 +409,7 @@ Tiling。非 fp16、非对齐尾块和不能安全折叠的任意排列均保留
 | `op_kernel/CMakeLists.txt` | `10b4df9e22540a42e443602357cf8a7bfa71b4c9c7198fa7da6b3f4343b00118` |
 | `op_kernel/concat.cpp` | `6ff66e8845a1dd60f148536bd3770677a1627d8a9d9d89a9371b8e0ab86353d8` |
 
-### 8.2 Greater
+### 9.2 Greater
 
 | 文件 | SHA-256 |
 | --- | --- |
@@ -335,7 +419,7 @@ Tiling。非 fp16、非对齐尾块和不能安全折叠的任意排列均保留
 | `op_kernel/CMakeLists.txt` | `de2557844234c8ca7d5952ec124d4c53f0196d9066d5e172f86f62808fb776a6` |
 | `op_kernel/greater.cpp` | `0f2aaab2f2a0d804281a177bed09d915bd329d55b402c5fa6a596aef8380c5e0` |
 
-### 8.3 IndexAdd
+### 9.3 IndexAdd
 
 | 文件 | SHA-256 |
 | --- | --- |
@@ -345,7 +429,7 @@ Tiling。非 fp16、非对齐尾块和不能安全折叠的任意排列均保留
 | `op_kernel/CMakeLists.txt` | `fb5e4b00af77bb885d29dff3faa1f1c094e79f19f6a366eca0d381a209819627` |
 | `op_kernel/index_add.cpp` | `e9ee4fdd157ef6a92ae843eef49eb8179a558885695dc0bdcbfcece82bca7aa8` |
 
-### 8.4 Transpose
+### 9.4 Transpose
 
 | 文件 | SHA-256 |
 | --- | --- |
@@ -355,7 +439,17 @@ Tiling。非 fp16、非对齐尾块和不能安全折叠的任意排列均保留
 | `op_kernel/CMakeLists.txt` | `dc5e6d36cbd092eed6fdc008a40896ede683299a3affeb91d693343bd6f29597` |
 | `op_kernel/transpose.cpp` | `2684abf308169407a7cff07c7b82ba2e3c53e10f80a1ae9c26763c410c682293` |
 
-## 9. 云端状态
+### 9.5 SquareSumV1
+
+| 文件 | SHA-256 |
+| --- | --- |
+| `op_host/CMakeLists.txt` | `0dd1acfd256e9666299b0b634c4f16362aa61702395fb68a504a12ddec123f23` |
+| `op_host/square_sum_v1.cpp` | `eac0db09a9f929898ecf145580052822041df01b5a76ff05eb701f592ea98abd` |
+| `op_host/square_sum_v1_tiling.h` | `e669820ab05878a8701fe2e6f33f4b44076ee93e74c1a308c3b5e8fcf54079f6` |
+| `op_kernel/CMakeLists.txt` | `f70a5fa430598410e08085e9e16bfdfd86254a87977bdf4105f9f548b5fa4cee` |
+| `op_kernel/square_sum_v1.cpp` | `04d5f4d859cb044f9392e3d69a898b6db313919a9ed5f8a9c45385e856eb149b` |
+
+## 10. 云端状态
 
 云环境：
 
@@ -373,6 +467,8 @@ CANN: /home/ma-user/Ascend/cann-8.5.0
 /home/ma-user/work/s9/experiments/greater_int32_masks_20260728_1439
 /home/ma-user/work/s9/experiments/indexadd_hitreuse_20260728_1514
 /home/ma-user/work/s9/experiments/transpose_release_20260728_1703
+/home/ma-user/work/s9/experiments/squaresum_workspace_best_20260729_1854
+/home/ma-user/work/s9/release/squaresum_final_20260729
 ```
 
 云端发布包：
@@ -384,9 +480,20 @@ CANN: /home/ma-user/Ascend/cann-8.5.0
 /home/ma-user/work/s9/releases/transpose_20260728_1706/Transpose.zip
 ```
 
-截至 2026-07-28 17:07，四个云端 ZIP 均已重新读取，并与本地
-`提交相关材料/` 对比：文件大小、ZIP SHA-256、包内每个源码 SHA-256
-和 `.run` SHA-256 全部一致。
+SquareSumV1 的正式回归证据：
+
+```text
+/home/ma-user/work/s9/validation/regression_922_formal_final_20260729
+/home/ma-user/work/s9/experiments/squaresum_workspace_best_20260729_1854/validation/profile_final_*
+```
+
+截至 2026-07-29 19:34，SquareSumV1 的正式源码、独立构建源码、
+包内源码逐文件哈希一致；包内 `.run` 与云端正式构建产物 SHA-256
+一致。旧提交包已备份为：
+
+```text
+提交相关材料/历史版本/SquareSumV1_pre_workspace_parallel_20260729-1933.zip
+```
 
 所有云端命令通过本地 `ssh_visible.ps1` 执行，并记录在：
 
@@ -394,7 +501,7 @@ CANN: /home/ma-user/Ascend/cann-8.5.0
 /home/ma-user/work/s9/codex-visible-terminal.log
 ```
 
-## 10. 平台已知结果与解释
+## 11. 平台已知结果与解释
 
 用户此前提供的结果：
 
@@ -416,21 +523,15 @@ CANN: /home/ma-user/Ascend/cann-8.5.0
 - 排名变化；
 - 若失败，保存平台结果文本，不猜隐藏数据。
 
-## 11. 下一次工作如何接续
+## 12. 下一次工作如何接续
 
-### 11.1 先收平台反馈
+### 12.1 先收平台反馈
 
-按顺序上传：
+当前优先上传 `SquareSumV1.zip`。上传后记录五个 Case 的 Pass/Fail、
+每个耗时和 `prof_sum`，再决定下一轮优化方向。不要在等待结果期间
+覆盖这个已验证基线。
 
-1. `Concat.zip`
-2. `Greater.zip`
-3. `IndexAdd.zip`
-4. `Transpose.zip`
-
-每题上传后先确认五个 Case 全 Pass，再比较耗时。不要同时修改多个
-算子，否则无法定位性能变化。
-
-### 11.2 复核本地工作区
+### 12.2 复核本地工作区
 
 ```bash
 git status --short
@@ -441,12 +542,13 @@ git diff --check
 正式源码只从 `submission-src/` 取。不要从 `candidates/`、
 `current-submission-extracted-*` 或历史实验目录覆盖正式版本。
 
-### 11.3 云端执行纪律
+### 12.3 云端执行纪律
 
 显式加载 CANN 8.5.0：
 
 ```bash
-source /home/ma-user/Ascend/cann-8.5.0/set_env.sh
+source /home/ma-user/Ascend/cann-8.5.0/bin/setenv.bash
+source /home/ma-user/Ascend/cann-8.5.0/opp/vendors/customize/bin/set_env.bash
 ```
 
 登录欢迎信息可能仍显示镜像预置的旧 CANN 字样，不能据此判断实际构建
@@ -463,14 +565,14 @@ source /home/ma-user/Ascend/cann-8.5.0/set_env.sh
 7. 只有正确且有稳定收益才提升为正式源码；
 8. 独立无缓存重建后再打包。
 
-### 11.4 后续题目
+### 12.4 后续工作
 
-下一题为 `SquareSumV1`。先重读题面、Excel 中的官方链接和两轮专家
-意见，再核对当前正式源码、旧平台结果和 922 例验证矩阵。每个优化
-假设必须在独立实验目录做正确性与同形状 A/B，禁止把未经验证的候选
-覆盖 `submission-src/SquareSumV1`。
+收到 SquareSumV1 平台结果后，先确认五个隐藏 Case 是否全 Pass，再按
+最慢 Case 的量级与现有通用路径建立可验证假设。隐藏 shape 不可见，
+不得反推或硬编码；每个候选必须在独立实验目录完成正确性与同形状
+A/B，未经验证不得覆盖 `submission-src/SquareSumV1`。
 
-## 12. 安全与仓库卫生
+## 13. 安全与仓库卫生
 
 禁止提交：
 
@@ -486,10 +588,11 @@ git diff --check
 git ls-files | grep -Ei '\.(pem|key|run|so|whl|zip)$'
 ```
 
-## 13. 结论边界
+## 14. 结论边界
 
-当前能够确认的是：前四题的正式源码、云端构建产物、本地提交包和验证
-证据已形成可复现闭环，并已逐哈希对齐。
+当前能够确认的是：五题的正式源码、云端构建产物、本地提交包和验证
+证据已形成可复现闭环；SquareSumV1 已完成两次 922 全量回归、正式
+构建专项复验和逐哈希对齐。
 
 当前不能确认的是：新包在官方隐藏 Case 上的最终耗时、排名和是否已经
 进入奖励区间。所有平台结论必须等待用户回传五个 Case 的实际结果。

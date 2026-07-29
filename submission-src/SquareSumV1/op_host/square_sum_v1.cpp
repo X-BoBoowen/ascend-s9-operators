@@ -3,6 +3,7 @@
 
 #include "square_sum_v1_tiling.h"
 #include "register/op_def_registry.h"
+#include "tiling/platform/platform_ascendc.h"
 
 namespace {
 constexpr size_t MAX_RANK = 5;
@@ -227,7 +228,9 @@ static ge::graphStatus TilingFunc(gert::TilingContext* context)
     }
     const gert::StorageShape* inputStorage =
         context->GetInputShape(0);
-    if (inputStorage == nullptr) {
+    const gert::CompileTimeTensorDesc* inputDesc =
+        context->GetInputDesc(0);
+    if (inputStorage == nullptr || inputDesc == nullptr) {
         return ge::GRAPH_FAILED;
     }
 
@@ -266,8 +269,39 @@ static ge::graphStatus TilingFunc(gert::TilingContext* context)
     constexpr uint32_t MAX_BLOCK_DIM = 40;
     constexpr uint32_t SMALL_FAST_BLOCK_DIM = 32;
     constexpr uint64_t FULL_CORE_INPUT_THRESHOLD = 1U << 20U;
+    constexpr uint64_t LARGE_MIDDLE_REDUCE_THRESHOLD = 2048;
+    constexpr uint64_t MIDDLE_OUTPUTS_PER_CORE_TARGET = 16;
+    constexpr uint64_t ATOMIC_REDUCE_INPUT_THRESHOLD = 1U << 18U;
+    constexpr uint64_t ATOMIC_REDUCE_MIN_ELEMENTS = 2048;
+    constexpr uint64_t ATOMIC_REDUCE_MAX_OUTPUTS = 8;
+    constexpr uint64_t WORKSPACE_REDUCE_INPUT_THRESHOLD = 1U << 18U;
+    constexpr uint64_t WORKSPACE_REDUCE_MIN_ELEMENTS = 2048;
+    constexpr uint64_t WORKSPACE_LAST_MAX_OUTPUTS = 8;
+    constexpr uint64_t WORKSPACE_MIDDLE_MAX_OUTPUTS = 1024;
+    constexpr uint64_t LONG_CONTIGUOUS_THRESHOLD = 8192;
+    const bool atomicReduce =
+        inputDesc->GetDataType() == ge::DT_FLOAT &&
+        fastPath == 1 &&
+        inputElements >= ATOMIC_REDUCE_INPUT_THRESHOLD &&
+        reduceElements >= ATOMIC_REDUCE_MIN_ELEMENTS &&
+        outputElements <= ATOMIC_REDUCE_MAX_OUTPUTS;
+    const bool workspaceReduce =
+        inputElements >= WORKSPACE_REDUCE_INPUT_THRESHOLD &&
+        reduceElements >= WORKSPACE_REDUCE_MIN_ELEMENTS &&
+        ((fastPath == 1 &&
+          inputDesc->GetDataType() != ge::DT_FLOAT &&
+          outputElements <= WORKSPACE_LAST_MAX_OUTPUTS) ||
+         (fastPath == 2 &&
+          outputElements <= WORKSPACE_MIDDLE_MAX_OUTPUTS));
+    const uint32_t reduceMode =
+        atomicReduce ? 1U : (workspaceReduce ? 2U : 0U);
+    const bool longContiguous =
+        fastPath == 1 &&
+        reduceElements > LONG_CONTIGUOUS_THRESHOLD;
     uint64_t desiredBlocks = 0;
-    if (fastPath == 1 || fastPath == 3) {
+    if (reduceMode != 0U) {
+        desiredBlocks = MAX_BLOCK_DIM;
+    } else if (fastPath == 1 || fastPath == 3) {
         const uint32_t fastBlockDim =
             inputElements >= FULL_CORE_INPUT_THRESHOLD
                 ? MAX_BLOCK_DIM
@@ -276,6 +310,13 @@ static ge::graphStatus TilingFunc(gert::TilingContext* context)
             outputElements < fastBlockDim
                 ? outputElements
                 : fastBlockDim;
+    } else if (
+        fastPath == 2 &&
+        reduceElements >= LARGE_MIDDLE_REDUCE_THRESHOLD) {
+        desiredBlocks =
+            (outputElements +
+             MIDDLE_OUTPUTS_PER_CORE_TARGET - 1) /
+            MIDDLE_OUTPUTS_PER_CORE_TARGET;
     } else {
         desiredBlocks =
             (outputElements + OUTPUTS_PER_CORE_TARGET - 1) /
@@ -303,18 +344,35 @@ static ge::graphStatus TilingFunc(gert::TilingContext* context)
     tiling.set_outputRank(outputRank);
     tiling.set_reduceRank(reduceRank);
     tiling.set_fastPath(fastPath);
+    tiling.set_reduceMode(reduceMode);
     tiling.set_outputDims(outputDims);
     tiling.set_outputInputStrides(outputInputStrides);
     tiling.set_reduceDims(reduceDims);
     tiling.set_reduceInputStrides(reduceInputStrides);
 
+    context->SetTilingKey(longContiguous ? 2U : 1U);
     context->SetBlockDim(blockDim);
     tiling.SaveToBuffer(
         context->GetRawTilingData()->GetData(),
         context->GetRawTilingData()->GetCapacity());
     context->GetRawTilingData()->SetDataSize(tiling.GetDataSize());
     size_t* workspace = context->GetWorkspaceSizes(1);
-    workspace[0] = 0;
+    if (workspace == nullptr) {
+        return ge::GRAPH_FAILED;
+    }
+    if (workspaceReduce) {
+        const uint64_t partialStride =
+            (outputElements + 7U) / 8U * 8U;
+        const platform_ascendc::PlatformAscendC ascendcPlatform(
+            context->GetPlatformInfo());
+        const size_t systemWorkspace =
+            ascendcPlatform.GetLibApiWorkSpaceSize();
+        workspace[0] = static_cast<size_t>(
+            partialStride * blockDim * sizeof(float)) +
+            systemWorkspace;
+    } else {
+        workspace[0] = 0;
+    }
     return ge::GRAPH_SUCCESS;
 }
 }

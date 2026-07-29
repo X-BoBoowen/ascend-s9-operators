@@ -12,6 +12,7 @@ BEGIN_TILING_DATA_DEF(SquareSumV1TilingData)
     TILING_DATA_FIELD_DEF(uint32_t, outputRank);
     TILING_DATA_FIELD_DEF(uint32_t, reduceRank);
     TILING_DATA_FIELD_DEF(uint32_t, fastPath);
+    TILING_DATA_FIELD_DEF(uint32_t, reduceMode);
     TILING_DATA_FIELD_DEF_ARR(uint64_t, 5, outputDims);
     TILING_DATA_FIELD_DEF_ARR(uint64_t, 5, outputInputStrides);
     TILING_DATA_FIELD_DEF_ARR(uint64_t, 5, reduceDims);
