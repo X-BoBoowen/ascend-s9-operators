@@ -6,12 +6,32 @@
 #include "tiling/platform/platform_ascendc.h"
 
 namespace optiling {
-static bool IsSpecialEmpty(const gert::Shape& shape)
+namespace {
+constexpr uint32_t MAX_INPUT_COUNT = 2048;
+constexpr size_t MAX_RANK = 8;
+constexpr uint32_t ALIGN_BYTES = 32;
+
+// One core needs enough bytes for a DMA burst to amortise kernel launch and
+// tail handling. 4 KB reproduces the 16 cores that the earlier 8/16/32-core
+// sweep picked for the 64 KB public shape, while replacing the 64 KB budget
+// that used to pin everything below 1.5 MB to 16 cores regardless of size.
+constexpr uint64_t MIN_BYTES_PER_CORE = 4 * 1024;
+constexpr uint32_t FALLBACK_CORES = 40;
+
+// Flat mode granularity: prefer 512 B units so each core issues few large
+// transfers, falling back to 32 B when the payload is too small to split.
+constexpr uint32_t WIDE_WORK_UNIT_BYTES = 512;
+
+constexpr uint32_t MODE_ROW_BLOCK = 0;
+constexpr uint32_t MODE_ROW_GENERIC = 1;
+constexpr uint32_t MODE_FLAT = 2;
+
+bool IsSpecialEmpty(const gert::Shape& shape)
 {
     return shape.GetDimNum() == 1 && shape.GetDim(0) == 0;
 }
 
-static uint32_t GetElementBytes(const ge::DataType dataType)
+uint32_t GetElementBytes(const ge::DataType dataType)
 {
     switch (dataType) {
         case ge::DT_INT8:
@@ -26,7 +46,7 @@ static uint32_t GetElementBytes(const ge::DataType dataType)
     }
 }
 
-static bool SafeMultiply(
+bool SafeMultiply(
     const uint64_t left,
     const uint64_t right,
     uint64_t& result)
@@ -39,6 +59,12 @@ static bool SafeMultiply(
     return true;
 }
 
+uint64_t CeilDiv(const uint64_t value, const uint64_t divisor)
+{
+    return divisor == 0 ? 0 : (value + divisor - 1) / divisor;
+}
+}  // namespace
+
 static ge::graphStatus TilingFunc(gert::TilingContext* context)
 {
     if (context == nullptr) {
@@ -46,7 +72,6 @@ static ge::graphStatus TilingFunc(gert::TilingContext* context)
     }
     const uint32_t inputCount = static_cast<uint32_t>(
         context->GetComputeNodeInputNum());
-    constexpr uint32_t MAX_INPUT_COUNT = 256;
     if (inputCount == 0 || inputCount > MAX_INPUT_COUNT) {
         return ge::GRAPH_FAILED;
     }
@@ -70,7 +95,6 @@ static ge::graphStatus TilingFunc(gert::TilingContext* context)
     }
     const gert::Shape& shape = referenceShape->GetStorageShape();
     const size_t rank = shape.GetDimNum();
-    constexpr size_t MAX_RANK = 8;
     if (rank == 0 || rank > MAX_RANK) {
         return ge::GRAPH_FAILED;
     }
@@ -88,14 +112,14 @@ static ge::graphStatus TilingFunc(gert::TilingContext* context)
     }
     const uint32_t dim = static_cast<uint32_t>(normalizedDim);
 
-    uint64_t outer64 = 1;
+    uint64_t outer = 1;
     for (size_t i = 0; i < dim; ++i) {
         const int64_t extent = shape.GetDim(i);
         if (extent < 0 ||
             !SafeMultiply(
-                outer64,
+                outer,
                 static_cast<uint64_t>(extent),
-                outer64)) {
+                outer)) {
             return ge::GRAPH_FAILED;
         }
     }
@@ -122,9 +146,14 @@ static ge::graphStatus TilingFunc(gert::TilingContext* context)
     if (elementBytes == 0) {
         return ge::GRAPH_FAILED;
     }
+    uint64_t innerBytes = 0;
+    if (!SafeMultiply(innerElements, elementBytes, innerBytes)) {
+        return ge::GRAPH_FAILED;
+    }
 
     uint64_t concatenatedDim = 0;
-    uint64_t inputRowBytes[MAX_INPUT_COUNT] = {};
+    uint32_t dimExtents[MAX_INPUT_COUNT] = {};
+    bool allRowsAligned = true;
     for (uint32_t i = 0; i < inputCount; ++i) {
         const gert::StorageShape* currentShape =
             context->GetDynamicInputShape(0, i);
@@ -135,10 +164,9 @@ static ge::graphStatus TilingFunc(gert::TilingContext* context)
             currentTensor->GetDataType() != firstTensor->GetDataType()) {
             return ge::GRAPH_FAILED;
         }
-        const gert::Shape& current =
-            currentShape->GetStorageShape();
+        const gert::Shape& current = currentShape->GetStorageShape();
         if (IsSpecialEmpty(current)) {
-            inputRowBytes[i] = 0;
+            dimExtents[i] = 0;
             continue;
         }
         if (current.GetDimNum() != rank) {
@@ -147,109 +175,125 @@ static ge::graphStatus TilingFunc(gert::TilingContext* context)
         for (size_t axis = 0; axis < rank; ++axis) {
             const int64_t extent = current.GetDim(axis);
             if (extent < 0 ||
-                (axis != dim &&
-                 extent != shape.GetDim(axis))) {
+                (axis != dim && extent != shape.GetDim(axis))) {
                 return ge::GRAPH_FAILED;
             }
         }
-        const uint64_t currentDim =
-            static_cast<uint64_t>(current.GetDim(dim));
+        const int64_t rawExtent = current.GetDim(dim);
+        if (rawExtent > static_cast<int64_t>(
+                std::numeric_limits<uint32_t>::max())) {
+            return ge::GRAPH_FAILED;
+        }
+        const uint64_t currentDim = static_cast<uint64_t>(rawExtent);
         if (currentDim >
-            std::numeric_limits<uint64_t>::max() -
-                concatenatedDim) {
+            std::numeric_limits<uint64_t>::max() - concatenatedDim) {
             return ge::GRAPH_FAILED;
         }
         concatenatedDim += currentDim;
-        uint64_t rowElements = 0;
-        if (!SafeMultiply(
-                currentDim,
-                innerElements,
-                rowElements) ||
-            !SafeMultiply(
-                rowElements,
-                elementBytes,
-                inputRowBytes[i])) {
+        dimExtents[i] = static_cast<uint32_t>(currentDim);
+
+        uint64_t rowBytes = 0;
+        if (!SafeMultiply(currentDim, innerBytes, rowBytes)) {
             return ge::GRAPH_FAILED;
+        }
+        if (rowBytes % ALIGN_BYTES != 0) {
+            allRowsAligned = false;
         }
     }
 
-    uint64_t outRowElements = 0;
     uint64_t outRowBytes = 0;
-    if (!SafeMultiply(
-            concatenatedDim,
-            innerElements,
-            outRowElements) ||
-        !SafeMultiply(
-            outRowElements,
-            elementBytes,
-            outRowBytes)) {
+    if (!SafeMultiply(concatenatedDim, innerBytes, outRowBytes)) {
         return ge::GRAPH_FAILED;
     }
     uint64_t totalBytes = 0;
-    if (!SafeMultiply(outer64, outRowBytes, totalBytes)) {
+    if (!SafeMultiply(outer, outRowBytes, totalBytes)) {
         return ge::GRAPH_FAILED;
     }
+    if (outRowBytes % ALIGN_BYTES != 0) {
+        allRowsAligned = false;
+    }
 
-    constexpr uint32_t MAX_ROW_BLOCK_DIM = 16;
-    uint32_t rowBlockDim = outer64 == 0
-        ? 1
-        : static_cast<uint32_t>(
-            outer64 < MAX_ROW_BLOCK_DIM
-                ? outer64
-                : MAX_ROW_BLOCK_DIM);
     auto platform =
         platform_ascendc::PlatformAscendC(context->GetPlatformInfo());
     uint32_t availableCores = platform.GetCoreNumAiv();
     if (availableCores == 0) {
-        availableCores = MAX_ROW_BLOCK_DIM;
+        availableCores = FALLBACK_CORES;
     }
-    constexpr uint64_t TARGET_BYTES_PER_CORE = 64 * 1024;
-    uint64_t desiredCores64 =
-        totalBytes / TARGET_BYTES_PER_CORE +
-        (totalBytes % TARGET_BYTES_PER_CORE != 0 ? 1U : 0U);
-    if (desiredCores64 == 0) {
-        desiredCores64 = 1;
+
+    // Single byte-based core budget for every mode. The previous revision
+    // combined a 16-core row cap with a 24-core promotion threshold, which
+    // left everything between 1 MB and 1.5 MB stranded on 16 cores.
+    uint64_t byteCores = CeilDiv(totalBytes, MIN_BYTES_PER_CORE);
+    if (byteCores == 0) {
+        byteCores = 1;
     }
-    if (desiredCores64 > availableCores) {
-        desiredCores64 = availableCores;
+    if (byteCores > availableCores) {
+        byteCores = availableCores;
     }
-    const uint32_t desiredCores =
-        static_cast<uint32_t>(desiredCores64);
-    constexpr uint32_t MIN_DYNAMIC_ROW_CORES = 24;
-    if (outer64 >= MAX_ROW_BLOCK_DIM &&
-        desiredCores >= MIN_DYNAMIC_ROW_CORES &&
-        desiredCores > rowBlockDim) {
-        rowBlockDim = desiredCores;
+
+    uint32_t mode = MODE_FLAT;
+    uint32_t blockDim = static_cast<uint32_t>(byteCores);
+    uint64_t rowCores = outer < byteCores ? outer : byteCores;
+    if (rowCores >= 1 && outer != 0) {
+        // Row splitting keeps each core's output span contiguous, so it can
+        // stage whole rows in UB and write them back with aligned bursts.
+        // Only take it when it does not starve cores relative to flat mode.
+        const bool rowsCoverCores = rowCores * 2 >= byteCores;
+        if (rowsCoverCores) {
+            mode = allRowsAligned ? MODE_ROW_BLOCK : MODE_ROW_GENERIC;
+            blockDim = static_cast<uint32_t>(rowCores);
+        }
     }
-    const uint32_t copyMode =
-        outer64 < MAX_ROW_BLOCK_DIM &&
-        desiredCores > rowBlockDim
-            ? 1U
-            : 0U;
-    const uint32_t blockDim =
-        copyMode == 1 ? desiredCores : rowBlockDim;
-    const uint64_t totalWorkBlocks =
-        totalBytes / 32U +
-        (totalBytes % 32U != 0 ? 1U : 0U);
+
+    uint32_t workUnitBytes = WIDE_WORK_UNIT_BYTES;
+    uint64_t totalWorkBlocks = 0;
+    if (mode == MODE_FLAT) {
+        if (CeilDiv(totalBytes, WIDE_WORK_UNIT_BYTES) <
+            static_cast<uint64_t>(blockDim)) {
+            workUnitBytes = ALIGN_BYTES;
+        }
+        totalWorkBlocks = CeilDiv(totalBytes, workUnitBytes);
+        if (totalWorkBlocks == 0) {
+            totalWorkBlocks = 1;
+        }
+        if (totalWorkBlocks < blockDim) {
+            blockDim = static_cast<uint32_t>(totalWorkBlocks);
+        }
+    }
+    if (blockDim == 0) {
+        blockDim = 1;
+    }
 
     ConcatTilingData tiling;
-    tiling.set_outer(outer64);
+    tiling.set_outer(outer);
     tiling.set_outRowBytes(outRowBytes);
-    tiling.set_innerElements(innerElements);
+    tiling.set_innerBytes(innerBytes);
+    tiling.set_totalBytes(totalBytes);
+    tiling.set_baseRowsPerBlock(
+        mode == MODE_FLAT ? 0 : outer / blockDim);
+    tiling.set_baseWorkBlocks(
+        mode == MODE_FLAT ? totalWorkBlocks / blockDim : 0);
     tiling.set_inputCount(inputCount);
+    tiling.set_mode(mode);
+    tiling.set_elementBytes(elementBytes);
     tiling.set_rank(static_cast<uint32_t>(rank));
     tiling.set_dim(dim);
-    tiling.set_elementBytes(elementBytes);
-    tiling.set_baseRowsPerBlock(outer64 / blockDim);
     tiling.set_extraBlocks(static_cast<uint32_t>(
-        outer64 % blockDim));
-    tiling.set_copyMode(copyMode);
-    tiling.set_baseWorkBlocks(totalWorkBlocks / blockDim);
+        mode == MODE_FLAT ? 0 : outer % blockDim));
     tiling.set_extraWorkBlocks(static_cast<uint32_t>(
-        totalWorkBlocks % blockDim));
-    tiling.set_inputRowBytes(inputRowBytes);
+        mode == MODE_FLAT ? totalWorkBlocks % blockDim : 0));
+    tiling.set_workUnitBytes(workUnitBytes);
+    tiling.set_dimExtents(dimExtents);
 
+    // Mode is dispatched at runtime from tiling data rather than through a
+    // tiling key, so only one kernel binary has to be built.
     context->SetBlockDim(blockDim);
+    // The extent array raised this structure past 8 KB; fail loudly rather
+    // than let a short buffer truncate it into garbage tiling.
+    if (context->GetRawTilingData() == nullptr ||
+        context->GetRawTilingData()->GetCapacity() < tiling.GetDataSize()) {
+        return ge::GRAPH_FAILED;
+    }
     tiling.SaveToBuffer(
         context->GetRawTilingData()->GetData(),
         context->GetRawTilingData()->GetCapacity());
@@ -295,8 +339,8 @@ static ge::graphStatus InferShape(gert::InferShapeContext* context)
     }
 
     const size_t rank = firstShape->GetDimNum();
-    constexpr size_t MAX_RANK = 8;
-    if (rank == 0 || rank > MAX_RANK) {
+    constexpr size_t MAX_INFER_RANK = 8;
+    if (rank == 0 || rank > MAX_INFER_RANK) {
         return ge::GRAPH_FAILED;
     }
     const gert::RuntimeAttrs* attrs = context->GetAttrs();
