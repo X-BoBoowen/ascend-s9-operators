@@ -58,7 +58,7 @@ D:\29722\Desktop\GCC\提交相关材料\
 | `Greater.zip` | 398168 B | `316797810d06b57d18c898d1fe449c1b0b51565c6a842845dded75524f7f868d` |
 | `IndexAdd.zip` | 417920 B | `cf8c08a60d3b356686a07e136766dd06128afa87dccf67d9c9940330843d990b` |
 | `Transpose.zip` | 410044 B | `b564a3724999cd2f3ef1b2ebf8c6e75c8c72778ffaa659125883130ac1d541cc` |
-| `SquareSumV1.zip` | 453473 B | `83e574b46752ec089d42fdfa1ddce04b387e1c14781c04bd9a76a48314261ad1` |
+| `SquareSumV1.zip` | 451339 B | `d5d0407c7f81519dce36682d18104d1579bf96642ea898e0706c91550942dbb7` |
 
 包内 `.run`：
 
@@ -478,6 +478,7 @@ CANN: /home/ma-user/Ascend/cann-8.5.0
 /home/ma-user/work/s9/releases/greater_20260728_1511/Greater.zip
 /home/ma-user/work/s9/releases/indexadd_20260728_1622/IndexAdd.zip
 /home/ma-user/work/s9/releases/transpose_20260728_1706/Transpose.zip
+/home/ma-user/work/s9/releases/squaresum_20260729_1938/SquareSumV1.zip
 ```
 
 SquareSumV1 的正式回归证据：
