@@ -1,0 +1,34 @@
+
+[2026-07-29 20:54:07 +0800] $ set -e
+echo 'LATEST_RELEASE_ARTIFACTS'
+for f in \
+  /home/ma-user/work/s9/releases/concat_20260728_1446/Concat.zip \
+  /home/ma-user/work/s9/releases/greater_20260728_1511/Greater.zip \
+  /home/ma-user/work/s9/releases/indexadd_20260728_1622/IndexAdd.zip \
+  /home/ma-user/work/s9/releases/transpose_20260729_2032/Transpose.zip \
+  /home/ma-user/work/s9/releases/squaresum_20260729_1938/SquareSumV1.zip
+do
+  test -f "$f"
+  sha256sum "$f"
+done
+The environment has been set
+The environment has been set
+ __  __               _          _                      _
+|  \/  |             | |        | |     /\             | |
+| \  / |   ___     __| |   ___  | |    /  \     _ __   | |_   ___
+| |\/| |  / _ \   / _  |  / _ \ | |   / /\ \   |  __| | __ | / __|
+| |  | | | (_) | | (_| | |  __/ | |  / ____ \  | |     | |_  \__ \
+|_|  |_|  \___/   \__ _|  \___| |_| /_/    \_\ |_|      \__| |___/
+Using user ma-user
+EulerOS 2.0 (SP10), CANN-7.0.RC1 [V100R001C29],[V100R001C30],[V100R001C13],[V100R003C10],[V100R003C11]
+Tips:
+1) Navigate to the target conda environment. For details, see /home/ma-user/README.
+2) Copy (Ctrl+C) and paste (Ctrl+V) on the jupyter terminal.
+3) Store your data in /home/ma-user/work, to which a persistent volume is mounted.
+4) Exercise caution when using plaintext passwords, hard-coded AK/SK, or directly entering them in the command line.
+LATEST_RELEASE_ARTIFACTS
+b43e88f82ba5230f9172b1f1f2f4c07381d4f14cd1fb5a4de3cf3871c55d25b2  /home/ma-user/work/s9/releases/concat_20260728_1446/Concat.zip
+316797810d06b57d18c898d1fe449c1b0b51565c6a842845dded75524f7f868d  /home/ma-user/work/s9/releases/greater_20260728_1511/Greater.zip
+cf8c08a60d3b356686a07e136766dd06128afa87dccf67d9c9940330843d990b  /home/ma-user/work/s9/releases/indexadd_20260728_1622/IndexAdd.zip
+52850235386690dcd89bf0fff039a4e510345a725aa2616d5f2a7c4d4fb5f1d0  /home/ma-user/work/s9/releases/transpose_20260729_2032/Transpose.zip
+d5d0407c7f81519dce36682d18104d1579bf96642ea898e0706c91550942dbb7  /home/ma-user/work/s9/releases/squaresum_20260729_1938/SquareSumV1.zip

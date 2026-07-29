@@ -551,6 +551,19 @@ Transpose 的正式源码、独立构建源码和包内源码逐文件哈希一�
 /home/ma-user/work/s9/codex-visible-terminal.log
 ```
 
+每次通过 `ssh_visible.ps1` 启动新的服务器运行时，还会先清空仓库根目录
+的 `artifact/`，再将本次运行结果写入：
+
+```text
+artifact/result.json
+artifact/run.log
+```
+
+`result.json` 使用 UTF-8 和缩进格式，记录远端命令、开始/结束时间、
+运行时长、退出码和成功状态；`run.log` 保存本次运行的完整终端输出。
+两个正式文件都先写入同目录临时文件，再以替换方式发布，避免中途
+中断留下半写文件。`artifact/` 只代表最新一次运行，不保留历史记录。
+
 ## 11. 平台已知结果与解释
 
 用户此前提供的结果：
@@ -577,9 +590,9 @@ Transpose 的正式源码、独立构建源码和包内源码逐文件哈希一�
 
 ### 12.1 先收平台反馈
 
-当前优先上传 `SquareSumV1.zip`。上传后记录五个 Case 的 Pass/Fail、
-每个耗时和 `prof_sum`，再决定下一轮优化方向。不要在等待结果期间
-覆盖这个已验证基线。
+五题当前正式 ZIP 已交用户逐题上传。上传后分别记录五个 Case 的
+Pass/Fail、每个耗时和 `prof_sum`，再决定下一轮优化方向。平台测评
+期间不得覆盖这些已验证基线，也不得用旧结果评价当前 ZIP。
 
 ### 12.2 复核本地工作区
 
@@ -617,10 +630,10 @@ source /home/ma-user/Ascend/cann-8.5.0/opp/vendors/customize/bin/set_env.bash
 
 ### 12.4 后续工作
 
-收到 SquareSumV1 平台结果后，先确认五个隐藏 Case 是否全 Pass，再按
-最慢 Case 的量级与现有通用路径建立可验证假设。隐藏 shape 不可见，
-不得反推或硬编码；每个候选必须在独立实验目录完成正确性与同形状
-A/B，未经验证不得覆盖 `submission-src/SquareSumV1`。
+收到五题平台结果后，先确认每题五个隐藏 Case 是否全 Pass，再按题目
+顺序和最慢 Case 的量级，与现有通用路径建立可验证假设。隐藏 shape
+不可见，不得反推或硬编码；每个候选必须在独立实验目录完成正确性与
+同形状 A/B，未经验证不得覆盖对应的 `submission-src/<Op>`。
 
 ## 13. 安全与仓库卫生
 

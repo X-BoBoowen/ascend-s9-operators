@@ -28,6 +28,11 @@ checkpoints/
 *.tgz
 *.tar.gz
 
+# Keep only the latest server-run artifacts under version control.
+!/artifact/
+!/artifact/result.json
+!/artifact/run.log
+
 # Local configuration and credentials
 .env
 .env.*

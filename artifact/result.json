@@ -1,0 +1,10 @@
+{
+  "command": "set -e\necho 'LATEST_RELEASE_ARTIFACTS'\nfor f in \\\n  /home/ma-user/work/s9/releases/concat_20260728_1446/Concat.zip \\\n  /home/ma-user/work/s9/releases/greater_20260728_1511/Greater.zip \\\n  /home/ma-user/work/s9/releases/indexadd_20260728_1622/IndexAdd.zip \\\n  /home/ma-user/work/s9/releases/transpose_20260729_2032/Transpose.zip \\\n  /home/ma-user/work/s9/releases/squaresum_20260729_1938/SquareSumV1.zip\ndo\n  test -f \"$f\"\n  sha256sum \"$f\"\ndone",
+  "remote": "ma-user@dev-modelarts.cn-southwest-2.huaweicloud.com:32375",
+  "started_at": "2026-07-29T20:54:02.5293426+08:00",
+  "finished_at": "2026-07-29T20:54:07.8719586+08:00",
+  "duration_ms": 5342.616,
+  "exit_code": 0,
+  "success": true,
+  "log": "artifact/run.log"
+}
