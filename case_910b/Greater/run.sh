@@ -51,4 +51,11 @@ if (( time_use >= time_base )); then
     exit 1
 fi
 
+# Collect this run into artifact/<Op>/ for off-machine analysis. Runs after
+# scoring so it can never change the pass/fail verdict; a collector failure is
+# reported but not fatal.
+python3 ../collect_artifact.py "Greater" "$case_id" \
+    ${CASE_BYTES:+--bytes "$CASE_BYTES"} \
+    --log "$test_log" || echo "[WARN] artifact collection failed"
+
 echo "Operator performance and accuracy have passed"

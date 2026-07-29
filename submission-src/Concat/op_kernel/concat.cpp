@@ -130,8 +130,6 @@ public:
         }
         // A staged batch must hold at least one whole row for the single
         // write-back to stay contiguous; wider rows go to the generic path.
-        // That bound also keeps the UB-side stride inside its field, since
-        // any gap is smaller than one staged row.
         if (outRowBytes_ > STAGE_BYTES) {
             Generic(inputCount, dimExtents);
             return;
@@ -164,26 +162,48 @@ public:
                         context_->InputAddress(i)),
                     (firstRow_ + rowOffset + batchRows) * rowBytes);
 
-                AscendC::DataCopyExtParams params;
-                params.blockCount = static_cast<uint16_t>(batchRows);
-                params.blockLen = static_cast<uint32_t>(rowBytes);
-                // Rows of one input sit back to back in GM, so the gap
-                // between consecutive blocks is zero bytes. The UB side
-                // skips the columns owned by the other inputs; aligned mode
-                // guarantees that remainder is a whole number of 32 B units.
-                params.srcStride = 0;
-                params.dstStride = static_cast<uint32_t>(
-                    (outRowBytes_ - rowBytes) / ALIGN_BYTES);
                 AscendC::DataCopyPadExtParams<uint8_t> padParams;
                 padParams.isPad = false;
                 padParams.leftPadding = 0;
                 padParams.rightPadding = 0;
                 padParams.paddingValue = 0;
-                AscendC::DataCopyPad(
-                    stage[columnBytes],
-                    inputGm[(firstRow_ + rowOffset) * rowBytes],
-                    params,
-                    padParams);
+
+                // Batching rows into one request needs the UB landing slot
+                // to advance by whole 32 B units, which holds only when this
+                // input's column offset and width are both aligned. Random
+                // split widths almost never are, so an unaligned input still
+                // gets assembled here -- one request per row -- rather than
+                // falling back to its own GM write-back. The expensive part
+                // is the unaligned write to GM, and that is gone either way.
+                const uint64_t gap = outRowBytes_ - rowBytes;
+                if (columnBytes % ALIGN_BYTES == 0 &&
+                    gap % ALIGN_BYTES == 0) {
+                    AscendC::DataCopyExtParams params;
+                    params.blockCount = static_cast<uint16_t>(batchRows);
+                    params.blockLen = static_cast<uint32_t>(rowBytes);
+                    params.srcStride = 0;
+                    params.dstStride =
+                        static_cast<uint32_t>(gap / ALIGN_BYTES);
+                    AscendC::DataCopyPad(
+                        stage[columnBytes],
+                        inputGm[(firstRow_ + rowOffset) * rowBytes],
+                        params,
+                        padParams);
+                } else {
+                    AscendC::DataCopyExtParams params;
+                    params.blockCount = 1;
+                    params.blockLen = static_cast<uint32_t>(rowBytes);
+                    params.srcStride = 0;
+                    params.dstStride = 0;
+                    for (uint32_t row = 0; row < batchRows; ++row) {
+                        AscendC::DataCopyPad(
+                            stage[row * outRowBytes_ + columnBytes],
+                            inputGm[
+                                (firstRow_ + rowOffset + row) * rowBytes],
+                            params,
+                            padParams);
+                    }
+                }
                 columnBytes += rowBytes;
             }
 

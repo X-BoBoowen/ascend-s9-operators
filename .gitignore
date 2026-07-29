@@ -28,10 +28,17 @@ checkpoints/
 *.tgz
 *.tar.gz
 
-# Keep only the latest server-run artifacts under version control.
+# Keep only the latest server-run artifacts under version control. The
+# per-operator subdirectories are written by case_910b/collect_artifact.py and
+# hold run.log / op_summary.csv, both of which the broader *.log and PROF*
+# rules above would otherwise exclude.
 !/artifact/
 !/artifact/result.json
 !/artifact/run.log
+!/artifact/*/
+!/artifact/*/run.log
+!/artifact/*/op_summary.csv
+!/artifact/*/summary.json
 
 # Local configuration and credentials
 .env

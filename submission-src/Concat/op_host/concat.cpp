@@ -153,7 +153,6 @@ static ge::graphStatus TilingFunc(gert::TilingContext* context)
 
     uint64_t concatenatedDim = 0;
     uint32_t dimExtents[MAX_INPUT_COUNT] = {};
-    bool allRowsAligned = true;
     for (uint32_t i = 0; i < inputCount; ++i) {
         const gert::StorageShape* currentShape =
             context->GetDynamicInputShape(0, i);
@@ -196,9 +195,6 @@ static ge::graphStatus TilingFunc(gert::TilingContext* context)
         if (!SafeMultiply(currentDim, innerBytes, rowBytes)) {
             return ge::GRAPH_FAILED;
         }
-        if (rowBytes % ALIGN_BYTES != 0) {
-            allRowsAligned = false;
-        }
     }
 
     uint64_t outRowBytes = 0;
@@ -208,9 +204,6 @@ static ge::graphStatus TilingFunc(gert::TilingContext* context)
     uint64_t totalBytes = 0;
     if (!SafeMultiply(outer, outRowBytes, totalBytes)) {
         return ge::GRAPH_FAILED;
-    }
-    if (outRowBytes % ALIGN_BYTES != 0) {
-        allRowsAligned = false;
     }
 
     auto platform =
@@ -240,7 +233,15 @@ static ge::graphStatus TilingFunc(gert::TilingContext* context)
         // Only take it when it does not starve cores relative to flat mode.
         const bool rowsCoverCores = rowCores * 2 >= byteCores;
         if (rowsCoverCores) {
-            mode = allRowsAligned ? MODE_ROW_BLOCK : MODE_ROW_GENERIC;
+            // Assembly only needs the output row pitch aligned, which makes
+            // every staged write-back start on a 32 B boundary. Individual
+            // split widths may be arbitrary; the kernel decides per input
+            // whether it can batch rows. Requiring every width to be aligned
+            // would have made this path unreachable for the random split
+            // widths these cases actually generate.
+            mode = outRowBytes % ALIGN_BYTES == 0
+                ? MODE_ROW_BLOCK
+                : MODE_ROW_GENERIC;
             blockDim = static_cast<uint32_t>(rowCores);
         }
     }
