@@ -1,16 +1,19 @@
 
-[2026-07-29 20:54:07 +0800] $ set -e
-echo 'LATEST_RELEASE_ARTIFACTS'
-for f in \
-  /home/ma-user/work/s9/releases/concat_20260728_1446/Concat.zip \
-  /home/ma-user/work/s9/releases/greater_20260728_1511/Greater.zip \
-  /home/ma-user/work/s9/releases/indexadd_20260728_1622/IndexAdd.zip \
-  /home/ma-user/work/s9/releases/transpose_20260729_2032/Transpose.zip \
-  /home/ma-user/work/s9/releases/squaresum_20260729_1938/SquareSumV1.zip
-do
-  test -f "$f"
-  sha256sum "$f"
-done
+[2026-07-29 20:55:53 +0800] $ set -e
+repo=/home/ma-user/work/s9/repository/ascend-s9-operators
+echo 'CLOUD_SYNC_BEFORE'
+git -C "$repo" branch --show-current
+git -C "$repo" rev-parse HEAD
+if test -n "$(git -C "$repo" status --porcelain --untracked-files=no)"; then
+  echo 'Tracked cloud changes detected; refusing to overwrite.' >&2
+  git -C "$repo" status --short
+  exit 2
+fi
+git -C "$repo" fetch origin main
+git -C "$repo" merge --ff-only origin/main
+echo 'CLOUD_SYNC_AFTER'
+git -C "$repo" rev-parse HEAD
+git -C "$repo" status --short
 The environment has been set
 The environment has been set
  __  __               _          _                      _
@@ -26,9 +29,24 @@ Tips:
 2) Copy (Ctrl+C) and paste (Ctrl+V) on the jupyter terminal.
 3) Store your data in /home/ma-user/work, to which a persistent volume is mounted.
 4) Exercise caution when using plaintext passwords, hard-coded AK/SK, or directly entering them in the command line.
-LATEST_RELEASE_ARTIFACTS
-b43e88f82ba5230f9172b1f1f2f4c07381d4f14cd1fb5a4de3cf3871c55d25b2  /home/ma-user/work/s9/releases/concat_20260728_1446/Concat.zip
-316797810d06b57d18c898d1fe449c1b0b51565c6a842845dded75524f7f868d  /home/ma-user/work/s9/releases/greater_20260728_1511/Greater.zip
-cf8c08a60d3b356686a07e136766dd06128afa87dccf67d9c9940330843d990b  /home/ma-user/work/s9/releases/indexadd_20260728_1622/IndexAdd.zip
-52850235386690dcd89bf0fff039a4e510345a725aa2616d5f2a7c4d4fb5f1d0  /home/ma-user/work/s9/releases/transpose_20260729_2032/Transpose.zip
-d5d0407c7f81519dce36682d18104d1579bf96642ea898e0706c91550942dbb7  /home/ma-user/work/s9/releases/squaresum_20260729_1938/SquareSumV1.zip
+CLOUD_SYNC_BEFORE
+main
+7e08dc7522d6f0e093062a73d8636539819ca783
+From https://github.com/X-BoBoowen/ascend-s9-operators
+ * branch            main       -> FETCH_HEAD
+   7e08dc7..1902bfd  main       -> origin/main
+Updating 7e08dc7..1902bfd
+Fast-forward
+ .gitignore           |  5 +++
+ README.md            | 27 +++++++++++----
+ artifact/result.json | 10 ++++++
+ artifact/run.log     | 34 +++++++++++++++++++
+ ssh_visible.ps1      | 93 ++++++++++++++++++++++++++++++++++++++++++++++++++++
+ 5 files changed, 162 insertions(+), 7 deletions(-)
+ create mode 100644 artifact/result.json
+ create mode 100644 artifact/run.log
+ create mode 100644 ssh_visible.ps1
+CLOUD_SYNC_AFTER
+1902bfd7dda3cb60dbef2d5dea28e97b4384ca84
+?? validation/Transpose/common/
+?? validation/common/
