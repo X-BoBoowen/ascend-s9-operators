@@ -32,7 +32,8 @@ Transpose_zip/
 `-- custom_opp_euleros_aarch64.run
 ```
 
-`.run` 在 ZIP 内权限为 `0755`。ZIP 完整性测试和 `.run` 自校验通过，
+`.run` 在 ZIP 内权限为 `0750`，具有可执行权限。ZIP 完整性测试和
+`.run` 自校验均通过，
 算子注册名为 `Transpose`。
 
 旧本地包已备份为：
