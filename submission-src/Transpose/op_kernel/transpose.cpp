@@ -354,6 +354,19 @@ public:
         pipe_.InitBuffer(
             outputBuffer_,
             TILE_ELEMENTS * sizeof(T));
+        if constexpr (sizeof(T) == 4U) {
+            pipe_.InitBuffer(
+                patternBuffer_,
+                TILE_SIDE * 32U);
+        } else if constexpr (
+            std::is_same<T, int8_t>::value) {
+            pipe_.InitBuffer(
+                patternBuffer_,
+                (TILE_SIDE / 2U) * 32U);
+            pipe_.InitBuffer(gatherBuffer_, 256U);
+            pipe_.InitBuffer(splitBuffer_, 256U);
+            pipe_.InitBuffer(convertBuffer_, 256U);
+        }
         mte2ToSEvent_ = static_cast<event_t>(
             pipe_.FetchEventID(AscendC::HardEvent::MTE2_S));
         sToMte3Event_ = static_cast<event_t>(
@@ -372,6 +385,12 @@ public:
             inputBuffer_.Get<T>();
         AscendC::LocalTensor<T> outputLocal =
             outputBuffer_.Get<T>();
+        if constexpr (sizeof(T) == 4U) {
+            InitializeTransposePatterns();
+        } else if constexpr (
+            std::is_same<T, int8_t>::value) {
+            InitializeInt8Patterns();
+        }
         for (uint32_t tile = 0; tile < tiles_; ++tile) {
             const uint32_t rowStart = tileRow_ * TILE_SIDE;
             const uint32_t colStart = tileCol_ * TILE_SIDE;
@@ -409,30 +428,54 @@ public:
                 padding);
 
             if constexpr (std::is_same<T, half>::value) {
-                if (validRows == MATRIX_TILE &&
-                    validCols == MATRIX_TILE) {
-                    AscendC::SetFlag<
-                        AscendC::HardEvent::MTE2_V>(
-                        mte2ToVEvent_);
-                    AscendC::WaitFlag<
-                        AscendC::HardEvent::MTE2_V>(
-                        mte2ToVEvent_);
-                    AscendC::Transpose(
-                        outputLocal,
-                        inputLocal);
-                    AscendC::SetFlag<
-                        AscendC::HardEvent::V_MTE3>(
-                        vToMte3Event_);
-                    AscendC::WaitFlag<
-                        AscendC::HardEvent::V_MTE3>(
-                        vToMte3Event_);
-                } else {
-                    ScalarTranspose(
-                        inputLocal,
-                        outputLocal,
-                        validRows,
-                        validCols);
-                }
+                AscendC::SetFlag<
+                    AscendC::HardEvent::MTE2_V>(
+                    mte2ToVEvent_);
+                AscendC::WaitFlag<
+                    AscendC::HardEvent::MTE2_V>(
+                    mte2ToVEvent_);
+                AscendC::Transpose(
+                    outputLocal,
+                    inputLocal);
+                AscendC::SetFlag<
+                    AscendC::HardEvent::V_MTE3>(
+                    vToMte3Event_);
+                AscendC::WaitFlag<
+                    AscendC::HardEvent::V_MTE3>(
+                    vToMte3Event_);
+            } else if constexpr (sizeof(T) == 4U) {
+                AscendC::SetFlag<
+                    AscendC::HardEvent::MTE2_V>(
+                    mte2ToVEvent_);
+                AscendC::WaitFlag<
+                    AscendC::HardEvent::MTE2_V>(
+                    mte2ToVEvent_);
+                VectorTranspose32(
+                    inputLocal,
+                    outputLocal);
+                AscendC::SetFlag<
+                    AscendC::HardEvent::V_MTE3>(
+                    vToMte3Event_);
+                AscendC::WaitFlag<
+                    AscendC::HardEvent::V_MTE3>(
+                    vToMte3Event_);
+            } else if constexpr (
+                std::is_same<T, int8_t>::value) {
+                AscendC::SetFlag<
+                    AscendC::HardEvent::MTE2_V>(
+                    mte2ToVEvent_);
+                AscendC::WaitFlag<
+                    AscendC::HardEvent::MTE2_V>(
+                    mte2ToVEvent_);
+                VectorTransposeInt8(
+                    inputLocal,
+                    outputLocal);
+                AscendC::SetFlag<
+                    AscendC::HardEvent::V_MTE3>(
+                    vToMte3Event_);
+                AscendC::WaitFlag<
+                    AscendC::HardEvent::V_MTE3>(
+                    vToMte3Event_);
             } else {
                 ScalarTranspose(
                     inputLocal,
@@ -467,6 +510,142 @@ public:
     }
 
 private:
+    __aicore__ inline void InitializeTransposePatterns()
+    {
+        AscendC::LocalTensor<uint32_t> patternLocal =
+            patternBuffer_.Get<uint32_t>();
+        constexpr uint32_t PATTERN_WORDS_PER_REPEAT =
+            32U / sizeof(uint32_t);
+        for (uint32_t column = 0;
+             column < TILE_SIDE;
+             ++column) {
+            const uint32_t pattern =
+                0x01010101U << column;
+            AscendC::Duplicate(
+                patternLocal[
+                    column * PATTERN_WORDS_PER_REPEAT],
+                pattern,
+                2U);
+        }
+    }
+
+    __aicore__ inline void VectorTranspose32(
+        const AscendC::LocalTensor<T>& inputLocal,
+        AscendC::LocalTensor<T>& outputLocal)
+    {
+        AscendC::LocalTensor<uint32_t> patternLocal =
+            patternBuffer_.Get<uint32_t>();
+        AscendC::GatherMaskParams params;
+        params.src0BlockStride = 1;
+        params.repeatTimes =
+            static_cast<uint16_t>(TILE_SIDE);
+        params.src0RepeatStride = 0;
+        params.src1RepeatStride = 1;
+        uint64_t selected = 0;
+        AscendC::GatherMask(
+            outputLocal,
+            inputLocal,
+            patternLocal,
+            false,
+            0,
+            params,
+            selected);
+    }
+
+    __aicore__ inline void InitializeInt8Patterns()
+    {
+        AscendC::LocalTensor<uint16_t> patternLocal =
+            patternBuffer_.Get<uint16_t>();
+        constexpr uint32_t PATTERN_ELEMENTS_PER_REPEAT =
+            32U / sizeof(uint16_t);
+        for (uint32_t pair = 0;
+             pair < TILE_SIDE / 2U;
+             ++pair) {
+            AscendC::Duplicate(
+                patternLocal[
+                    pair * PATTERN_ELEMENTS_PER_REPEAT],
+                static_cast<uint16_t>(1U << pair),
+                8U);
+        }
+    }
+
+    __aicore__ inline void VectorTransposeInt8(
+        const AscendC::LocalTensor<T>& inputLocal,
+        AscendC::LocalTensor<T>& outputLocal)
+    {
+        AscendC::LocalTensor<uint16_t> inputPairs =
+            inputLocal.template ReinterpretCast<uint16_t>();
+        AscendC::LocalTensor<uint8_t> outputBytes =
+            outputLocal.template ReinterpretCast<uint8_t>();
+        AscendC::LocalTensor<uint16_t> gathered =
+            gatherBuffer_.Get<uint16_t>();
+        AscendC::LocalTensor<uint16_t> split =
+            splitBuffer_.Get<uint16_t>();
+        AscendC::LocalTensor<half> converted =
+            convertBuffer_.Get<half>();
+        AscendC::LocalTensor<uint16_t> patternLocal =
+            patternBuffer_.Get<uint16_t>();
+
+        AscendC::GatherMaskParams params;
+        params.src0BlockStride = 1;
+        params.repeatTimes = 4;
+        params.src0RepeatStride = 8;
+        params.src1RepeatStride = 0;
+        constexpr uint32_t PATTERN_ELEMENTS_PER_REPEAT =
+            32U / sizeof(uint16_t);
+        for (uint32_t pair = 0;
+             pair < TILE_SIDE / 2U;
+             ++pair) {
+            uint64_t selected = 0;
+            AscendC::GatherMask(
+                gathered,
+                inputPairs,
+                patternLocal[
+                    pair * PATTERN_ELEMENTS_PER_REPEAT],
+                false,
+                0,
+                params,
+                selected);
+
+            AscendC::ShiftLeft(
+                split,
+                gathered,
+                static_cast<uint16_t>(8U),
+                TILE_SIDE);
+            AscendC::ShiftRight(
+                split,
+                split,
+                static_cast<uint16_t>(8U),
+                TILE_SIDE);
+            AscendC::Cast(
+                converted,
+                split.template ReinterpretCast<int16_t>(),
+                AscendC::RoundMode::CAST_NONE,
+                TILE_SIDE);
+            AscendC::Cast(
+                outputBytes[(pair * 2U) * TILE_SIDE],
+                converted,
+                AscendC::RoundMode::CAST_NONE,
+                TILE_SIDE);
+
+            AscendC::ShiftRight(
+                split,
+                gathered,
+                static_cast<uint16_t>(8U),
+                TILE_SIDE);
+            AscendC::Cast(
+                converted,
+                split.template ReinterpretCast<int16_t>(),
+                AscendC::RoundMode::CAST_NONE,
+                TILE_SIDE);
+            AscendC::Cast(
+                outputBytes[(pair * 2U + 1U) * TILE_SIDE],
+                converted,
+                AscendC::RoundMode::CAST_NONE,
+                TILE_SIDE);
+        }
+    }
+
     __aicore__ inline void ScalarTranspose(
         const AscendC::LocalTensor<T>& inputLocal,
         AscendC::LocalTensor<T>& outputLocal,
@@ -511,6 +690,10 @@ private:
     AscendC::TPipe pipe_;
     AscendC::TBuf<AscendC::TPosition::VECCALC> inputBuffer_;
     AscendC::TBuf<AscendC::TPosition::VECCALC> outputBuffer_;
+    AscendC::TBuf<AscendC::TPosition::VECCALC> patternBuffer_;
+    AscendC::TBuf<AscendC::TPosition::VECCALC> gatherBuffer_;
+    AscendC::TBuf<AscendC::TPosition::VECCALC> splitBuffer_;
+    AscendC::TBuf<AscendC::TPosition::VECCALC> convertBuffer_;
     AscendC::GlobalTensor<T> inputGm_;
     AscendC::GlobalTensor<T> outputGm_;
     uint64_t matrixBase_;

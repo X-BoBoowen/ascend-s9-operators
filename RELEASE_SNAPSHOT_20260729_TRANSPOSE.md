@@ -1,11 +1,12 @@
 # Transpose 发布与续作快照
 
-时间：2026-07-28 17:10（Asia/Shanghai）
+时间：2026-07-29 20:34（Asia/Shanghai）
 
 ## 发布对象
 
-本快照固化 `Transpose` 的稳定通用实现。CANN 8.5 增强 Transpose API
-候选因设备级性能回退被拒绝，没有进入正式源码或发布包。
+本快照固化 `Transpose` 的向量化通用实现。正式版本优化了 FP16
+非整齐尾块、FP32/INT32 8×8 块和 INT8 32×32 块；CANN 8.5
+增强 Transpose API 候选因设备级性能回退被拒绝。
 
 ## 正式包
 
@@ -14,13 +15,13 @@
 D:\29722\Desktop\GCC\提交相关材料\Transpose.zip
 
 云端:
-/home/ma-user/work/s9/releases/transpose_20260728_1706/Transpose.zip
+/home/ma-user/work/s9/releases/transpose_20260729_2032/Transpose.zip
 ```
 
 | 对象 | 大小 | SHA-256 |
 | --- | ---: | --- |
-| `Transpose.zip` | 410044 B | `b564a3724999cd2f3ef1b2ebf8c6e75c8c72778ffaa659125883130ac1d541cc` |
-| 包内 `.run` | 427040 B | `8685eaffd9787893a659c9b1b7424aa88c2881d10921c8246fda7ce4d717709e` |
+| `Transpose.zip` | 401378 B | `52850235386690dcd89bf0fff039a4e510345a725aa2616d5f2a7c4d4fb5f1d0` |
+| 包内 `.run` | 418022 B | `2baf9ecb7e38716b5d4a7ca8e89c890be2392c4b8c9352d8ca67d8d23ca9a9af` |
 
 ZIP 只有一个顶层 `Transpose_zip/`，其中包含：
 
@@ -38,11 +39,11 @@ Transpose_zip/
 
 ```text
 D:\29722\Desktop\GCC\提交相关材料\历史版本\
-Transpose_before_20260728_1707_0b88b825e7ee.zip
+Transpose_pre_vectorized_20260729-2033.zip
 ```
 
 旧包 SHA-256：
-`0b88b825e7ee6e5cb598e5c3eb4638d4f652a4a0eb32671087a10a4aa3ff57e8`
+`b564a3724999cd2f3ef1b2ebf8c6e75c8c72778ffaa659125883130ac1d541cc`
 
 ## 正式源码
 
@@ -52,7 +53,7 @@ Transpose_before_20260728_1707_0b88b825e7ee.zip
 | `op_host/transpose.cpp` | `d68ec597fa68861a04f5da11f17b481674500567328fef57500a387786fdc260` |
 | `op_host/transpose_tiling.h` | `71d17bd19c58ada5ee29e6a1b3640e2f3c97ab8451cb9de6611d9a8befd4d5e1` |
 | `op_kernel/CMakeLists.txt` | `dc5e6d36cbd092eed6fdc008a40896ede683299a3affeb91d693343bd6f29597` |
-| `op_kernel/transpose.cpp` | `2684abf308169407a7cff07c7b82ba2e3c53e10f80a1ae9c26763c410c682293` |
+| `op_kernel/transpose.cpp` | `c59c71398d16431b7dd2d6b428dcc7969aae6f01d30ed0819df183f61278b581` |
 
 包内源码、`submission-src/Transpose/`、云端 Git 仓库源码和最终构建
 目录源码逐文件一致。
@@ -62,7 +63,7 @@ Transpose_before_20260728_1707_0b88b825e7ee.zip
 最终无缓存构建目录：
 
 ```text
-/home/ma-user/work/s9/experiments/transpose_release_20260728_1703
+/home/ma-user/work/s9/experiments/transpose_release_20260729_2027
 ```
 
 环境：
@@ -82,7 +83,47 @@ Transpose_before_20260728_1707_0b88b825e7ee.zip
 | 阈值、分块尾部、3–5 维旋转边界 | 84 | 全部通过 |
 | 合计 | 484 | 全部逐位相等 |
 
-同一套 484 例在旧稳定构建和最终无缓存构建上各完整通过一次。
+同一套 484 例在最终实验候选和正式目录无缓存构建上各完整通过一次。
+验证扩展也从仓库已跟踪的公共头文件强制重建，并重新通过 48 个定向
+用例。
+
+## 正式优化与性能证据
+
+- FP16：`DataCopyPad` 补齐 16×16 边界块，完整块和尾块统一调用硬件
+  `Transpose`，只回写有效区域；
+- FP32/INT32：为 8×8 块生成 8 组列掩码，单次 `GatherMask` 输出
+  64 个转置元素；
+- INT8：把相邻字节视为 `uint16` 列对，抽取 32 行后用移位与向量
+  转换拆成两条输出行。
+
+NPU Event 同形状中位数：
+
+| 场景 | 优化前 | 正式版本 |
+| --- | ---: | ---: |
+| FP16, 1024×1024 | 28.934 us | 29.111 us |
+| FP16, 1000×1000 尾块 | 176.429 us | 51.082 us |
+| FP32, 1024×1024 | 677.332 us | 188.231 us |
+| INT32, 1024×1024 | 677.395 us | 188.276 us |
+| INT8, 1024×1024 | 479.078 us | 88.978 us |
+| FP32, (32,256,512) 末两维交换 | 2745.314 us | 785.701 us |
+| INT8, (32,256,512) 末两维交换 | 1909.640 us | 349.423 us |
+
+`msprof` 设备内核中位数：
+
+| 场景 | 优化前 | 正式候选 |
+| --- | ---: | ---: |
+| FP16, 1024×1024 | 28.411 us | 28.451 us |
+| FP16, 1000×1000 尾块 | 176.154 us | 50.321 us |
+| FP32, 1024×1024 | 676.153 us | 185.894 us |
+| INT8, 1024×1024 | 478.500 us | 88.492 us |
+
+证据目录：
+
+```text
+/home/ma-user/work/s9/experiments/transpose_release_20260729_2027
+/home/ma-user/work/s9/profiles/transpose_true_baseline_20260729
+/home/ma-user/work/s9/profiles/transpose_vector_final_20260729
+```
 
 ## 已拒绝候选
 
@@ -117,4 +158,4 @@ profiling 证据：
 2. 保存 Case1–Case5 的 Pass/Fail、耗时和 `prof_sum`。
 3. 不使用旧平台结果评价新包。
 4. 若五个 Case 全 Pass，再按真实耗时定位下一轮瓶颈。
-5. 平台反馈等待期间按题目顺序继续 `SquareSumV1`。
+5. 平台反馈等待期间不根据隐藏形状猜分支，只按真实 Case 耗时继续优化。

@@ -12,10 +12,10 @@
 - Git 仓库保存源码、测试与文档，不保存 `.run`、ZIP、wheel 和
   profiler 数据库。
 
-> 状态时间：2026-07-29 19:34（Asia/Shanghai）
+> 状态时间：2026-07-29 20:34（Asia/Shanghai）
 >
 > 当前阶段：五道题均已完成本轮工程闭环并分别生成待测 ZIP；
-> `SquareSumV1` 已完成跨核归约优化、BF16 语义修复和正式构建复验。
+> `Transpose` 已完成 FP16 尾块、FP32/INT32 和 INT8 矩阵路径优化。
 
 ## 1. 当前状态
 
@@ -57,7 +57,7 @@ D:\29722\Desktop\GCC\提交相关材料\
 | `Concat.zip` | 410639 B | `b43e88f82ba5230f9172b1f1f2f4c07381d4f14cd1fb5a4de3cf3871c55d25b2` |
 | `Greater.zip` | 398168 B | `316797810d06b57d18c898d1fe449c1b0b51565c6a842845dded75524f7f868d` |
 | `IndexAdd.zip` | 417920 B | `cf8c08a60d3b356686a07e136766dd06128afa87dccf67d9c9940330843d990b` |
-| `Transpose.zip` | 410044 B | `b564a3724999cd2f3ef1b2ebf8c6e75c8c72778ffaa659125883130ac1d541cc` |
+| `Transpose.zip` | 401378 B | `52850235386690dcd89bf0fff039a4e510345a725aa2616d5f2a7c4d4fb5f1d0` |
 | `SquareSumV1.zip` | 451339 B | `d5d0407c7f81519dce36682d18104d1579bf96642ea898e0706c91550942dbb7` |
 
 包内 `.run`：
@@ -67,7 +67,7 @@ D:\29722\Desktop\GCC\提交相关材料\
 | Concat | `9dca80b07e85eacf9b90ac98349f64bf0ba0db19565c440f0c16f12cbf1ca873` |
 | Greater | `d8ab6f81aa1eaa775cbe69078db09901037ccad667216697371475a42dbb4298` |
 | IndexAdd | `58a5be8bbbc8db62708973fea21bd6630e1d938ae9c8a4ad28132f3014ce679d` |
-| Transpose | `8685eaffd9787893a659c9b1b7424aa88c2881d10921c8246fda7ce4d717709e` |
+| Transpose | `2baf9ecb7e38716b5d4a7ca8e89c890be2392c4b8c9352d8ca67d8d23ca9a9af` |
 | SquareSumV1 | `b8748b428673562c0ef25d7c1c9df7a26c2a5ca30988afdffa8f284aa15fc46e` |
 
 五个 ZIP 均只有一个顶层 `<Operator>_zip/`，包含 `op_host/`、
@@ -296,15 +296,48 @@ Host 先合并保持不变的前缀和可连续搬运的尾部，再根据排列
 - 多 batch、16×16 对齐的 fp16 硬件 Transpose。
 
 通用路径不依赖隐藏 shape；矩阵行列、batch 和 stride 均来自 Host
-Tiling。非 fp16、非对齐尾块和不能安全折叠的任意排列均保留正确回退。
+Tiling。循环置换折叠后的二维分块根据 dtype 使用三种向量数据流：
 
-### 7.3 验证与拒绝候选
+- FP16 的 16×16 输入块先由 `DataCopyPad` 补齐，完整块和边界块均调用
+  硬件 `Transpose`，只回写有效行列；
+- FP32/INT32 的 8×8 块预生成 8 组列掩码，一次 `GatherMask` 完成
+  64 个元素的转置；
+- INT8 的 32×32 块将相邻字节视为 `uint16` 列对，`GatherMask` 抽取
+  32 行的同一列对，再用移位与向量转换拆成两条输出行。
+
+不能安全折叠的任意排列继续走通用坐标映射或 gather 回退，不依赖
+隐藏 shape，也没有 Case 专用分支。
+
+### 7.3 验证、性能与拒绝候选
 
 - 48 个定向用例；
 - 200 个固定 seed 随机用例；
 - 152 个循环置换、任意排列和特殊 bit pattern 扩展用例；
 - 84 个阈值、行列分块和 3–5 维双向旋转边界用例；
-- 合计 484 个用例，在旧稳定构建和最终无缓存构建上各完整通过一次。
+- 合计 484 个用例，在最终候选和正式目录无缓存构建上各完整通过一次；
+- 三个优化阶段均在独立实验目录中构建、安装和回归，正式发布包再次
+  完整回归 484 例。
+
+相同扩展调用、相同输入的 NPU Event 中位数：
+
+| 场景 | 优化前 | 正式版本 |
+| --- | ---: | ---: |
+| FP16, 1024×1024 | 28.934 us | 29.111 us |
+| FP16, 1000×1000 尾块 | 176.429 us | 51.082 us |
+| FP32, 1024×1024 | 677.332 us | 188.231 us |
+| INT32, 1024×1024 | 677.395 us | 188.276 us |
+| INT8, 1024×1024 | 479.078 us | 88.978 us |
+| FP32, (32,256,512) 末两维交换 | 2745.314 us | 785.701 us |
+| INT8, (32,256,512) 末两维交换 | 1909.640 us | 349.423 us |
+
+设备侧 `msprof` 的同形状内核中位数进一步确认提升来自 Kernel：
+
+| 场景 | 优化前 Kernel | 正式候选 Kernel |
+| --- | ---: | ---: |
+| FP16, 1024×1024 | 28.411 us | 28.451 us |
+| FP16, 1000×1000 尾块 | 176.154 us | 50.321 us |
+| FP32, 1024×1024 | 676.153 us | 185.894 us |
+| INT8, 1024×1024 | 478.500 us | 88.492 us |
 
 曾实现 CANN 8.5 增强 Transpose API 的 UB 大块候选。它虽然通过同一
 484 例正确性回归，但设备级 profiling 显示明显回退：
@@ -437,7 +470,7 @@ BF16 专项包含曾经能暴露错误的
 | `op_host/transpose.cpp` | `d68ec597fa68861a04f5da11f17b481674500567328fef57500a387786fdc260` |
 | `op_host/transpose_tiling.h` | `71d17bd19c58ada5ee29e6a1b3640e2f3c97ab8451cb9de6611d9a8befd4d5e1` |
 | `op_kernel/CMakeLists.txt` | `dc5e6d36cbd092eed6fdc008a40896ede683299a3affeb91d693343bd6f29597` |
-| `op_kernel/transpose.cpp` | `2684abf308169407a7cff07c7b82ba2e3c53e10f80a1ae9c26763c410c682293` |
+| `op_kernel/transpose.cpp` | `c59c71398d16431b7dd2d6b428dcc7969aae6f01d30ed0819df183f61278b581` |
 
 ### 9.5 SquareSumV1
 
@@ -466,7 +499,7 @@ CANN: /home/ma-user/Ascend/cann-8.5.0
 /home/ma-user/work/s9/experiments/concat_dynamic_rows_20260728_1417
 /home/ma-user/work/s9/experiments/greater_int32_masks_20260728_1439
 /home/ma-user/work/s9/experiments/indexadd_hitreuse_20260728_1514
-/home/ma-user/work/s9/experiments/transpose_release_20260728_1703
+/home/ma-user/work/s9/experiments/transpose_release_20260729_2027
 /home/ma-user/work/s9/experiments/squaresum_workspace_best_20260729_1854
 /home/ma-user/work/s9/release/squaresum_final_20260729
 ```
@@ -477,7 +510,7 @@ CANN: /home/ma-user/Ascend/cann-8.5.0
 /home/ma-user/work/s9/releases/concat_20260728_1446/Concat.zip
 /home/ma-user/work/s9/releases/greater_20260728_1511/Greater.zip
 /home/ma-user/work/s9/releases/indexadd_20260728_1622/IndexAdd.zip
-/home/ma-user/work/s9/releases/transpose_20260728_1706/Transpose.zip
+/home/ma-user/work/s9/releases/transpose_20260729_2032/Transpose.zip
 /home/ma-user/work/s9/releases/squaresum_20260729_1938/SquareSumV1.zip
 ```
 
@@ -486,6 +519,22 @@ SquareSumV1 的正式回归证据：
 ```text
 /home/ma-user/work/s9/validation/regression_922_formal_final_20260729
 /home/ma-user/work/s9/experiments/squaresum_workspace_best_20260729_1854/validation/profile_final_*
+```
+
+Transpose 的正式回归和性能证据：
+
+```text
+/home/ma-user/work/s9/experiments/transpose_release_20260729_2027/release_*.log
+/home/ma-user/work/s9/experiments/transpose_release_20260729_2027/release_benchmark.log
+/home/ma-user/work/s9/profiles/transpose_true_baseline_20260729
+/home/ma-user/work/s9/profiles/transpose_vector_final_20260729
+```
+
+Transpose 的正式源码、独立构建源码和包内源码逐文件哈希一致；包内
+`.run` 与正式构建产物 SHA-256 一致。旧提交包已备份为：
+
+```text
+提交相关材料/历史版本/Transpose_pre_vectorized_20260729-2033.zip
 ```
 
 截至 2026-07-29 19:34，SquareSumV1 的正式源码、独立构建源码、
@@ -592,8 +641,8 @@ git ls-files | grep -Ei '\.(pem|key|run|so|whl|zip)$'
 ## 14. 结论边界
 
 当前能够确认的是：五题的正式源码、云端构建产物、本地提交包和验证
-证据已形成可复现闭环；SquareSumV1 已完成两次 922 全量回归、正式
-构建专项复验和逐哈希对齐。
+证据已形成可复现闭环；Transpose 的三类矩阵慢路径已完成向量化，
+正式构建通过 484 例回归，并有同形状事件计时和设备 profiling 证据。
 
 当前不能确认的是：新包在官方隐藏 Case 上的最终耗时、排名和是否已经
 进入奖励区间。所有平台结论必须等待用户回传五个 Case 的实际结果。

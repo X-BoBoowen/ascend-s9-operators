@@ -1,6 +1,6 @@
 #include <torch/extension.h>
 
-#include "../common/pytorch_npu_helper.hpp"
+#include "../../../case_910b/Transpose/common/pytorch_npu_helper.hpp"
 
 using namespace at;
 
