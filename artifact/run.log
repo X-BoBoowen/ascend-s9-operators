@@ -1,5 +1,5 @@
 
-[2026-07-30 16:41:19 +0800] $ set -e; repo=/home/ma-user/work/s9/repository/ascend-s9-operators; cd "$repo"; git status --short --branch; git rev-parse HEAD; git remote -v | head -4; sha256sum submission-src/SquareSumV1/op_host/square_sum_v1.cpp submission-src/SquareSumV1/op_kernel/square_sum_v1.cpp 2>/dev/null || true
+[2026-07-30 16:42:27 +0800] $ set -eo pipefail; repo=/home/ma-user/work/s9/repository/ascend-s9-operators; backup=/home/ma-user/work/s9/experiments/squaresum_s02f_grouped_vector8_20260730_1603/pre_git_sync_scripts_20260730_1643; test ! -e "$backup"; mkdir -p "$backup"; cd "$repo"; for f in validation/SquareSumV1/squaresum_grouped_sweep_20260730.py validation/SquareSumV1/squaresum_grouped_vector8_probe_20260730.py; do test -f "$f"; mv "$f" "$backup/"; done; git pull --ff-only origin main; test "$(git rev-parse HEAD)" = 3695428bff3272ea160d19183dc7ac8144c8d5ae || test "$(git rev-parse --short HEAD)" = 3695428; sha256sum submission-src/SquareSumV1/op_host/square_sum_v1.cpp submission-src/SquareSumV1/op_kernel/square_sum_v1.cpp validation/SquareSumV1/squaresum_grouped_vector8_probe_20260730.py; git status --short --branch
 The environment has been set
 The environment has been set
  __  __               _          _                      _
@@ -15,16 +15,29 @@ Tips:
 2) Copy (Ctrl+C) and paste (Ctrl+V) on the jupyter terminal.
 3) Store your data in /home/ma-user/work, to which a persistent volume is mounted.
 4) Exercise caution when using plaintext passwords, hard-coded AK/SK, or directly entering them in the command line.
+From https://github.com/X-BoBoowen/ascend-s9-operators
+ * branch            main       -> FETCH_HEAD
+   a3b40a0..3695428  main       -> origin/main
+Updating a3b40a0..3695428
+Fast-forward
+ OPTIMIZATION_PLAN_20260730.md                      |  93 ++++++-
+ README.md                                          | 155 ++++++++---
+ artifact/result.json                               |   8 +-
+ artifact/run.log                                   |  19 +-
+ .../SquareSumV1/op_host/square_sum_v1.cpp          |  99 ++++++-
+ .../SquareSumV1/op_kernel/CMakeLists.txt           |   2 +-
+ .../SquareSumV1/op_kernel/square_sum_v1.cpp        | 304 ++++++++++++++++++++-
+ .../squaresum_grouped_sweep_20260730.py            |  88 ++++++
+ .../squaresum_grouped_vector8_probe_20260730.py    |  80 ++++++
+ 9 files changed, 788 insertions(+), 60 deletions(-)
+ create mode 100644 validation/SquareSumV1/squaresum_grouped_sweep_20260730.py
+ create mode 100644 validation/SquareSumV1/squaresum_grouped_vector8_probe_20260730.py
+6c4731323e66d3e7a02044fa214386d7c10167a0ba145c6aa8d3902535f5f367  submission-src/SquareSumV1/op_host/square_sum_v1.cpp
+b668b6a2217130e1878063713b3d03f663c7626b7c175fb6c8e503119002255a  submission-src/SquareSumV1/op_kernel/square_sum_v1.cpp
+8cd77c9a63dd88af0fe26c9f22f24bb5d866ad7b2ac609f8cfd52322b0c54cf6  validation/SquareSumV1/squaresum_grouped_vector8_probe_20260730.py
 ## main...origin/main
 ?? validation/SquareSumV1/common
 ?? validation/SquareSumV1/squaresum_finalizer_sweep_20260730.py
-?? validation/SquareSumV1/squaresum_grouped_sweep_20260730.py
-?? validation/SquareSumV1/squaresum_grouped_vector8_probe_20260730.py
 ?? validation/SquareSumV1/squaresum_strided_sweep_20260730.py
 ?? validation/Transpose/common/
 ?? validation/common/
-a3b40a091cef49a5985235fc0667d023b9198f3f
-origin	https://github.com/X-BoBoowen/ascend-s9-operators.git (fetch)
-origin	https://github.com/X-BoBoowen/ascend-s9-operators.git (push)
-0b21de289de40325945ad8509abb64893f195b9f86b2b2fde85454e288b125c1  submission-src/SquareSumV1/op_host/square_sum_v1.cpp
-7e4ebe5801cccd5166f784e2f5b5befa323ff49e4a6d32dd6aca827cd1d4c5dd  submission-src/SquareSumV1/op_kernel/square_sum_v1.cpp
