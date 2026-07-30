@@ -73,7 +73,11 @@ __aicore__ inline bfloat16_t OutputFromFloat<bfloat16_t>(
     return FloatToBfloat16(value);
 }
 
-template <typename T, uint32_t CHUNK, bool TREE_FINALIZE>
+template <
+    typename T,
+    uint32_t CHUNK,
+    bool TREE_FINALIZE,
+    bool GROUPED_VECTOR8>
 class KernelSquareSumV1 {
 public:
     __aicore__ inline KernelSquareSumV1() {}
@@ -104,13 +108,21 @@ public:
         }
 
         const uint32_t blockIdx = AscendC::GetBlockIdx();
-        outputs_ = tiling.baseOutputsPerBlock +
+        const uint64_t scheduledOutputs =
+            tiling.baseOutputsPerBlock +
             (blockIdx < tiling.extraBlocks ? 1U : 0U);
-        firstOutput_ =
+        const uint64_t firstScheduledOutput =
             blockIdx * tiling.baseOutputsPerBlock +
             (blockIdx < tiling.extraBlocks
                 ? blockIdx
                 : tiling.extraBlocks);
+        if constexpr (GROUPED_VECTOR8) {
+            outputs_ = scheduledOutputs * 8U;
+            firstOutput_ = firstScheduledOutput * 8U;
+        } else {
+            outputs_ = scheduledOutputs;
+            firstOutput_ = firstScheduledOutput;
+        }
 
         inputGm_.SetGlobalBuffer(
             reinterpret_cast<__gm__ T*>(input),
@@ -174,6 +186,10 @@ public:
                 ProcessAtomicReduction();
                 return;
             }
+        }
+        if constexpr (GROUPED_VECTOR8) {
+            ProcessGroupedSuffixVector8();
+            return;
         }
         if (fastPath_ == 1) {
             const uint32_t elementsPerBlock =
@@ -1166,6 +1182,266 @@ private:
              trailingReduceElements_) *
             sizeof(T);
         return sourceGapBytes <= 0xFFFFFFFFULL;
+    }
+
+    __aicore__ inline void ProcessGroupedSuffixVector8()
+    {
+        constexpr uint32_t VECTOR_OUTPUTS = 8U;
+        AscendC::LocalTensor<T> inputLocal =
+            inputBuffer_.Get<T>();
+        AscendC::LocalTensor<T> outputLocal =
+            outputBuffer_.Get<T>();
+        AscendC::LocalTensor<float> floatLocal =
+            floatBuffer_.Get<float>();
+        AscendC::LocalTensor<float> partialLocal =
+            reduceWorkBuffer_.Get<float>();
+        AscendC::LocalTensor<float> accumulateLocal =
+            sumBuffer_.Get<float>();
+
+        uint64_t expectedStride = 1U;
+        uint32_t firstTrailingAxis = reduceRank_;
+        for (int32_t axis =
+                 static_cast<int32_t>(reduceRank_) - 1;
+             axis >= 0;
+             --axis) {
+            if (reduceInputStrides_[axis] !=
+                expectedStride) {
+                break;
+            }
+            expectedStride *= reduceDims_[axis];
+            firstTrailingAxis =
+                static_cast<uint32_t>(axis);
+        }
+        const uint32_t batchAxis =
+            firstTrailingAxis - 1U;
+        const uint64_t batchDim =
+            reduceDims_[batchAxis];
+        const uint64_t outerGroups =
+            reduceElements_ /
+            (batchDim * trailingReduceElements_);
+        const uint32_t trailing =
+            static_cast<uint32_t>(
+                trailingReduceElements_);
+        const uint32_t vectorInputElements =
+            VECTOR_OUTPUTS * trailing;
+        uint32_t batchRowsPerTile =
+            CHUNK / vectorInputElements;
+        if (batchRowsPerTile > 31U) {
+            batchRowsPerTile = 31U;
+        }
+        if (batchRowsPerTile == 0U) {
+            batchRowsPerTile = 1U;
+        }
+        const uint32_t sourceGapBytes =
+            static_cast<uint32_t>(
+                (reduceInputStrides_[batchAxis] -
+                 vectorInputElements) *
+                sizeof(T));
+
+        AscendC::DataCopyExtParams copyParams;
+        copyParams.blockLen =
+            vectorInputElements * sizeof(T);
+        copyParams.srcStride = sourceGapBytes;
+        copyParams.dstStride = 0;
+        AscendC::DataCopyPadExtParams<T> padParams;
+        padParams.isPad = false;
+        padParams.leftPadding = 0;
+        padParams.rightPadding = 0;
+        const T zero = {};
+        padParams.paddingValue = zero;
+
+        for (uint64_t outputOffset = 0;
+             outputOffset < outputs_;
+             outputOffset += VECTOR_OUTPUTS) {
+            const uint64_t outputStart =
+                firstOutput_ + outputOffset;
+            const uint64_t baseInputOffset =
+                BaseInputOffset(outputStart);
+            AscendC::Duplicate(
+                accumulateLocal,
+                0.0f,
+                VECTOR_OUTPUTS);
+
+            for (uint64_t group = 0;
+                 group < outerGroups;
+                 ++group) {
+                const uint64_t groupReduceStart =
+                    group * batchDim *
+                    trailingReduceElements_;
+                for (uint64_t batchOffset = 0;
+                     batchOffset < batchDim;
+                     batchOffset += batchRowsPerTile) {
+                    const uint32_t currentRows =
+                        static_cast<uint32_t>(
+                            batchDim - batchOffset <
+                                    batchRowsPerTile
+                                ? batchDim - batchOffset
+                                : batchRowsPerTile);
+                    uint32_t reductionRows = 1U;
+                    while (reductionRows < currentRows) {
+                        reductionRows <<= 1U;
+                    }
+                    const uint32_t inputCount =
+                        currentRows * vectorInputElements;
+                    const uint32_t partialCount =
+                        currentRows * VECTOR_OUTPUTS;
+                    const uint32_t paddedPartialCount =
+                        (reductionRows - currentRows) *
+                        VECTOR_OUTPUTS;
+                    const uint64_t inputStart =
+                        baseInputOffset +
+                        ReduceInputOffset(
+                            groupReduceStart +
+                            batchOffset *
+                                trailingReduceElements_);
+                    copyParams.blockCount =
+                        static_cast<uint16_t>(currentRows);
+                    AscendC::DataCopyPad(
+                        inputLocal,
+                        inputGm_[inputStart],
+                        copyParams,
+                        padParams);
+                    AscendC::SetFlag<
+                        AscendC::HardEvent::MTE2_V>(
+                        mte2ToVEvent_);
+                    AscendC::WaitFlag<
+                        AscendC::HardEvent::MTE2_V>(
+                        mte2ToVEvent_);
+
+                    if constexpr (
+                        std::is_same<T, float>::value) {
+                        AscendC::Mul(
+                            inputLocal,
+                            inputLocal,
+                            inputLocal,
+                            inputCount);
+                        AscendC::WholeReduceSum<float>(
+                            partialLocal,
+                            inputLocal,
+                            static_cast<int32_t>(trailing),
+                            static_cast<int32_t>(
+                                currentRows *
+                                VECTOR_OUTPUTS),
+                            1,
+                            1,
+                            static_cast<int32_t>(
+                                trailing / 8U));
+                    } else if constexpr (
+                        std::is_same<T, half>::value) {
+                        AscendC::Mul(
+                            inputLocal,
+                            inputLocal,
+                            inputLocal,
+                            inputCount);
+                        AscendC::Cast(
+                            floatLocal,
+                            inputLocal,
+                            AscendC::RoundMode::CAST_NONE,
+                            inputCount);
+                        AscendC::WholeReduceSum<float>(
+                            partialLocal,
+                            floatLocal,
+                            static_cast<int32_t>(trailing),
+                            static_cast<int32_t>(
+                                currentRows *
+                                VECTOR_OUTPUTS),
+                            1,
+                            1,
+                            static_cast<int32_t>(
+                                trailing / 8U));
+                    } else {
+                        AscendC::Cast(
+                            floatLocal,
+                            inputLocal,
+                            AscendC::RoundMode::CAST_NONE,
+                            inputCount);
+                        AscendC::Mul(
+                            floatLocal,
+                            floatLocal,
+                            floatLocal,
+                            inputCount);
+                        AscendC::Cast(
+                            inputLocal,
+                            floatLocal,
+                            AscendC::RoundMode::CAST_RINT,
+                            inputCount);
+                        AscendC::Cast(
+                            floatLocal,
+                            inputLocal,
+                            AscendC::RoundMode::CAST_NONE,
+                            inputCount);
+                        AscendC::WholeReduceSum<float>(
+                            partialLocal,
+                            floatLocal,
+                            static_cast<int32_t>(trailing),
+                            static_cast<int32_t>(
+                                currentRows *
+                                VECTOR_OUTPUTS),
+                            1,
+                            1,
+                            static_cast<int32_t>(
+                                trailing / 8U));
+                    }
+                    if (paddedPartialCount != 0U) {
+                        AscendC::Duplicate(
+                            partialLocal[partialCount],
+                            0.0f,
+                            paddedPartialCount);
+                    }
+                    ReduceRowsInto(
+                        partialLocal,
+                        accumulateLocal,
+                        reductionRows,
+                        VECTOR_OUTPUTS,
+                        VECTOR_OUTPUTS);
+                    AscendC::SetFlag<
+                        AscendC::HardEvent::V_MTE2>(
+                        vToMte2Event_);
+                    AscendC::WaitFlag<
+                        AscendC::HardEvent::V_MTE2>(
+                        vToMte2Event_);
+                }
+            }
+
+            if constexpr (std::is_same<T, float>::value) {
+                AscendC::Adds(
+                    outputLocal,
+                    accumulateLocal,
+                    0.0f,
+                    VECTOR_OUTPUTS);
+            } else if constexpr (
+                std::is_same<T, half>::value) {
+                AscendC::Cast(
+                    outputLocal,
+                    accumulateLocal,
+                    AscendC::RoundMode::CAST_NONE,
+                    VECTOR_OUTPUTS);
+            } else {
+                AscendC::Cast(
+                    outputLocal,
+                    accumulateLocal,
+                    AscendC::RoundMode::CAST_RINT,
+                    VECTOR_OUTPUTS);
+            }
+            AscendC::SetFlag<AscendC::HardEvent::V_MTE3>(
+                vToMte3Event_);
+            AscendC::WaitFlag<AscendC::HardEvent::V_MTE3>(
+                vToMte3Event_);
+            AscendC::DataCopyExtParams outputCopy;
+            outputCopy.blockCount = 1;
+            outputCopy.blockLen =
+                VECTOR_OUTPUTS * sizeof(T);
+            outputCopy.srcStride = 0;
+            outputCopy.dstStride = 0;
+            AscendC::DataCopyPad(
+                outputGm_[outputStart],
+                outputLocal,
+                outputCopy);
+            AscendC::SetFlag<AscendC::HardEvent::MTE3_V>(
+                mte3ToVEvent_);
+            AscendC::WaitFlag<AscendC::HardEvent::MTE3_V>(
+                mte3ToVEvent_);
+        }
     }
 
     __aicore__ inline void ProcessGroupedSuffix()
@@ -2199,6 +2475,7 @@ extern "C" __global__ __aicore__ void square_sum_v1(
         KernelSquareSumV1<
             DTYPE_INPUT,
             NORMAL_CHUNK,
+            false,
             false> op;
         op.Init(input, output, userWorkspace, tilingData);
         op.Process();
@@ -2214,6 +2491,7 @@ extern "C" __global__ __aicore__ void square_sum_v1(
         KernelSquareSumV1<
             DTYPE_INPUT,
             LONG_CHUNK,
+            false,
             false> op;
         op.Init(input, output, userWorkspace, tilingData);
         op.Process();
@@ -2229,7 +2507,8 @@ extern "C" __global__ __aicore__ void square_sum_v1(
         KernelSquareSumV1<
             DTYPE_INPUT,
             NORMAL_CHUNK,
-            true> op;
+            true,
+            false> op;
         op.Init(input, output, userWorkspace, tilingData);
         op.Process();
     } else if (TILING_KEY_IS(4)) {
@@ -2244,6 +2523,23 @@ extern "C" __global__ __aicore__ void square_sum_v1(
         KernelSquareSumV1<
             DTYPE_INPUT,
             LONG_CHUNK,
+            true,
+            false> op;
+        op.Init(input, output, userWorkspace, tilingData);
+        op.Process();
+    } else if (TILING_KEY_IS(5)) {
+        GET_TILING_DATA(tilingData, tiling);
+        if (tilingData.outputElements == 0) {
+            return;
+        }
+        GM_ADDR userWorkspace =
+            tilingData.reduceMode != 0U
+                ? AscendC::GetUserWorkspace(workspace)
+                : workspace;
+        KernelSquareSumV1<
+            DTYPE_INPUT,
+            NORMAL_CHUNK,
+            false,
             true> op;
         op.Init(input, output, userWorkspace, tilingData);
         op.Process();

@@ -17,8 +17,8 @@
 
 > 状态时间：2026-07-30（Asia/Shanghai）
 >
-> 当前阶段：五道题正式 ZIP 均已获得平台 `5/5 Pass` 结果；
-> 后续必须按五张独立榜单分别制定性能目标。
+> 当前阶段：五道题上一轮正式 ZIP 均已获得平台 `5/5 Pass` 结果；
+> `SquareSumV1-S02F` 已完成真机回归、独立重建和打包，等待平台评测。
 
 下一轮完整执行方案见
 [`OPTIMIZATION_PLAN_20260730.md`](./OPTIMIZATION_PLAN_20260730.md)。
@@ -33,7 +33,7 @@
 | Greater | 本轮完成 | 26 定向 + 220 随机 + 9 个 int32 扩展；扩展集连续复跑 3 次 | 已生成并审计 | 5/5 Pass，18595.372 |
 | IndexAdd | 本轮完成 | 23 定向 + 170 随机 + 345 扩展 = 538 | 已生成并审计 | 5/5 Pass，119427.8755 |
 | Transpose | 本轮完成 | 48 定向 + 200 随机 + 152 扩展 + 84 边界 = 484 | 已生成并审计 | 5/5 Pass，16303.227 |
-| SquareSumV1 | 本轮完成 | 922 全量 + 28 专项 + 4 组 BF16 逐位语义 | 已生成并审计 | 5/5 Pass，3282.536 |
+| SquareSumV1 | S02F 已完成 | 950 原有回归 + 16 个 S02F 专项 = 966 | 已生成并审计 | S02E2 5/5 Pass，3259.5255；S02F 待测 |
 
 这里的“本轮完成”表示：
 
@@ -66,7 +66,7 @@ D:\29722\Desktop\GCC\提交相关材料\
 | `Greater.zip` | 398168 B | `316797810d06b57d18c898d1fe449c1b0b51565c6a842845dded75524f7f868d` |
 | `IndexAdd.zip` | 417920 B | `cf8c08a60d3b356686a07e136766dd06128afa87dccf67d9c9940330843d990b` |
 | `Transpose.zip` | 401378 B | `52850235386690dcd89bf0fff039a4e510345a725aa2616d5f2a7c4d4fb5f1d0` |
-| `SquareSumV1.zip` | 451339 B | `d5d0407c7f81519dce36682d18104d1579bf96642ea898e0706c91550942dbb7` |
+| `SquareSumV1.zip` | 473756 B | `eecd9f1fd6b4c0617b6ec2ec632f24bb0f310d5a9d2f2125f03f6ec86ecfaf5b` |
 
 包内 `.run`：
 
@@ -76,11 +76,11 @@ D:\29722\Desktop\GCC\提交相关材料\
 | Greater | `d8ab6f81aa1eaa775cbe69078db09901037ccad667216697371475a42dbb4298` |
 | IndexAdd | `58a5be8bbbc8db62708973fea21bd6630e1d938ae9c8a4ad28132f3014ce679d` |
 | Transpose | `2baf9ecb7e38716b5d4a7ca8e89c890be2392c4b8c9352d8ca67d8d23ca9a9af` |
-| SquareSumV1 | `b8748b428673562c0ef25d7c1c9df7a26c2a5ca30988afdffa8f284aa15fc46e` |
+| SquareSumV1 | `aaa8096582170bab688607e40651e8c1d8b9b86e7f889f61948c8d1ce7320563` |
 
 五个 ZIP 均只有一个顶层 `<Operator>_zip/`，包含 `op_host/`、
 `op_kernel/` 和一个非空 `custom_opp_euleros_aarch64.run`。
-`IndexAdd` 的 `.run` 在 ZIP 中保持 `0750`，其余三个为 `0755`。
+`IndexAdd` 的 `.run` 在 ZIP 中保持 `0750`，其余四个为 `0755`。
 
 ## 3. 仓库结构
 
@@ -391,6 +391,19 @@ Kernel 保留通用坐标映射回退，同时为常见布局提供连续向量�
 归约长度超过 8192 时切换到更大的 UB 配置；两个 TilingKey 均有
 8192/8193 边界回归。
 
+S02F 为 fastPath3 增加第 5 个 TilingKey。仅当分组尾部归约满足
+32B 对齐、尾长不超过 64、最内层保留输出连续且可按 8 个输出成组、
+二维搬运跨度合法时，Kernel 才会：
+
+- 一次二维 DMA 搬入 8 个相邻输出的分组数据；
+- 用 `WholeReduceSum<float>` 批量得到 8 组局部和；
+- 在 UB 中按 batch 行做二叉树归约，最后一次写回 8 个输出。
+
+尾长 64 的上限来自 CANN 8.5.0 `WholeReduceSum<float>` 的单 repeat
+256B/64-float 硬件约束。尾长 1024 曾在候选边界测试中暴露错误，
+随后 Host 门控被收紧；该形状现已验证正确回退旧路径。其他不满足
+条件的形状也全部保留 S02E2 路径。
+
 数值语义方面：
 
 - FP16 先在 FP16 中平方，再转 FP32 累加，保留 FP16 平方溢出；
@@ -404,11 +417,15 @@ Kernel 保留通用坐标映射回退，同时为常见布局提供连续向量�
 - 46 个定向用例；
 - 150 个固定 seed 随机用例；
 - 726 个边界、布局和大维度扩展用例；
-- 合计 922 个用例在候选构建和正式目录干净构建上各完整通过一次；
+- 922 个基础、随机和扩展用例；
 - 10 个工作区模式探针；
 - 10 个 TilingKey/回退边界探针；
 - 4 个 FP32 原子稳定性探针；
-- 4 个 BF16 严格逐位语义探针。
+- 4 个 BF16 严格逐位语义探针；
+- 16 个 S02F 专项，覆盖 batch 31/32/33、40 核任务不均分、
+  `keep_dims`、负轴、三种 dtype、尾长 64 上限和尾长 1024 回退；
+- S02F 候选累计 `966/966 Pass`；正式源码独立重建后再次通过
+  16 个专项和 7 组性能矩阵的正确性检查。
 
 BF16 专项包含曾经能暴露错误的
 `63 × 0.10009765625`，修复前输出 `0.6328125`，PyTorch 期望
@@ -426,6 +443,21 @@ BF16 专项包含曾经能暴露错误的
 | FP32, shape=(200,1000,64), axis=(0,1) | 4015.3 us | 47.647 us | 84.3× |
 | FP16, shape=(200,1000,64), 全轴 | 1109.0 us | 38.273 us | 29.0× |
 | FP32, shape=(200,1000,64), 全轴 | 1049.0 us | 35.246 us | 29.8× |
+
+S02E2 与 S02F 在相邻时间窗口重新安装各自正式 `.run` 后的 fastPath3
+同形状 A/B（NPU Event 中位数）：
+
+| 场景 | S02E2 | S02F | 改善 |
+| --- | ---: | ---: | ---: |
+| small aligned FP16 | 43.614 us | 27.567 us | 36.79% |
+| medium aligned FP16 | 92.608 us | 68.257 us | 26.30% |
+| large aligned FP16 | 98.771 us | 77.377 us | 21.66% |
+| wide output FP16 | 187.409 us | 125.721 us | 32.92% |
+| medium aligned BF16 | 100.449 us | 78.185 us | 22.16% |
+| medium aligned FP32 | 88.014 us | 67.717 us | 23.06% |
+| 未命中尾长 33 FP16 | 101.707 us | 101.552 us | 0.15% 波动 |
+
+前 6 个命中形状合计由 610.865 降至 444.824 us，改善 27.18%。
 
 设备侧 profiling 的稳定区间中位数：
 
@@ -485,10 +517,10 @@ BF16 专项包含曾经能暴露错误的
 | 文件 | SHA-256 |
 | --- | --- |
 | `op_host/CMakeLists.txt` | `0dd1acfd256e9666299b0b634c4f16362aa61702395fb68a504a12ddec123f23` |
-| `op_host/square_sum_v1.cpp` | `eac0db09a9f929898ecf145580052822041df01b5a76ff05eb701f592ea98abd` |
+| `op_host/square_sum_v1.cpp` | `6c4731323e66d3e7a02044fa214386d7c10167a0ba145c6aa8d3902535f5f367` |
 | `op_host/square_sum_v1_tiling.h` | `e669820ab05878a8701fe2e6f33f4b44076ee93e74c1a308c3b5e8fcf54079f6` |
-| `op_kernel/CMakeLists.txt` | `f70a5fa430598410e08085e9e16bfdfd86254a87977bdf4105f9f548b5fa4cee` |
-| `op_kernel/square_sum_v1.cpp` | `04d5f4d859cb044f9392e3d69a898b6db313919a9ed5f8a9c45385e856eb149b` |
+| `op_kernel/CMakeLists.txt` | `62c979b878b6c91819cb9df2d8d49544a2d1f41be5a7031de6088688f2f0afd6` |
+| `op_kernel/square_sum_v1.cpp` | `b668b6a2217130e1878063713b3d03f663c7626b7c175fb6c8e503119002255a` |
 
 ## 10. 云端状态
 
@@ -509,7 +541,8 @@ CANN: /home/ma-user/Ascend/cann-8.5.0
 /home/ma-user/work/s9/experiments/indexadd_hitreuse_20260728_1514
 /home/ma-user/work/s9/experiments/transpose_release_20260729_2027
 /home/ma-user/work/s9/experiments/squaresum_workspace_best_20260729_1854
-/home/ma-user/work/s9/release/squaresum_final_20260729
+/home/ma-user/work/s9/experiments/squaresum_s02f_grouped_vector8_20260730_1603
+/home/ma-user/work/s9/release/squaresum_s02f_20260730_1629
 ```
 
 云端发布包：
@@ -519,7 +552,7 @@ CANN: /home/ma-user/Ascend/cann-8.5.0
 /home/ma-user/work/s9/releases/greater_20260728_1511/Greater.zip
 /home/ma-user/work/s9/releases/indexadd_20260728_1622/IndexAdd.zip
 /home/ma-user/work/s9/releases/transpose_20260729_2032/Transpose.zip
-/home/ma-user/work/s9/releases/squaresum_20260729_1938/SquareSumV1.zip
+/home/ma-user/work/s9/release/squaresum_s02f_20260730_1629/SquareSumV1.zip
 ```
 
 SquareSumV1 的正式回归证据：
@@ -527,6 +560,8 @@ SquareSumV1 的正式回归证据：
 ```text
 /home/ma-user/work/s9/validation/regression_922_formal_final_20260729
 /home/ma-user/work/s9/experiments/squaresum_workspace_best_20260729_1854/validation/profile_final_*
+/home/ma-user/work/s9/experiments/squaresum_s02f_grouped_vector8_20260730_1603/*.log
+/home/ma-user/work/s9/release/squaresum_s02f_20260730_1629/formal_*.log
 ```
 
 Transpose 的正式回归和性能证据：
@@ -665,21 +700,25 @@ source /home/ma-user/Ascend/cann-8.5.0/opp/vendors/customize/bin/set_env.bash
 
 1. `SquareSumV1-S02A` 的 atomic 越界修复已完成，并保留在后续正式
    版本中：atomic 目标为对齐 workspace，最终只回写真实输出字节。
-2. `SquareSumV1-S02E2` 已完成本地与云端正式构建、回归和打包，等待
-   官方五个隐藏 Case 评测；平台结果返回前不得宣称 `prof_sum` 已改善。
-3. 若 S02E2 仍未进入前十，继续优化 fastPath3 的输出维向量化和
-   `ReduceContiguous`，目标仍为 SquareSumV1 `prof_sum < 1268.598`。
-4. 第二争分题为 Concat；若其他 Case 不变，Case5 必须从 `511.44`
+2. `SquareSumV1-S02E2` 官方结果为 `3259.5255 us`，相比 S01 的
+   `3282.536 us` 只改善 `23.0105 us`（0.70%）；Case4 只改善
+   `1.844 us`，证明 fastPath4 没有命中主要瓶颈。
+3. `SquareSumV1-S02F` 已完成 fastPath3 连续 8 输出批处理、966 例
+   回归、相邻窗口 A/B、正式源码独立重建和打包，当前等待平台评测。
+4. 平台结果返回前不得宣称 S02F 的隐藏 Case 或 `prof_sum` 已改善；
+   后续继续诊断 `ReduceContiguous` 和未覆盖的 grouped-suffix 长尾，
+   目标仍为 SquareSumV1 `prof_sum < 1268.598`。
+5. 第二争分题为 Concat；若其他 Case 不变，Case5 必须从 `511.44`
    压到 `47.8935` 以下，题内目标 `< 225.096`。
-5. 第三题暂定 Transpose；Greater 与 IndexAdd 先分别完成一次结构诊断，
+6. 第三题暂定 Transpose；Greater 与 IndexAdd 先分别完成一次结构诊断，
    再按实测收益决定后续顺序。
 
 隐藏 shape 不可见，不得反推或硬编码；每个候选必须在独立实验目录完成
 正确性与同形状 A/B，未经验证不得覆盖对应的 `submission-src/<Op>`。
 
-### 12.5 SquareSumV1-S02E2 正式候选
+### 12.5 SquareSumV1-S02E2 历史正式候选
 
-2026-07-30 已将 `SquareSumV1-S02E2` 晋级为当前正式候选。该版本包含：
+2026-07-30 曾将 `SquareSumV1-S02E2` 晋级为正式候选。该版本包含：
 
 - float atomic 输出改为安全 workspace，消除对真实输出的对齐扩大写；
 - 大 workspace 归约使用独立 TilingKey 和 2D DMA + UB 树形 finalizer；
@@ -719,9 +758,9 @@ fastPath4 独立 A/B（NPU Event 中位数，单位 μs）：
 .run SHA-256:
 C19BA2DBE2E81E0E3D923F0E8A4F5D7EDAF79B6E84CD1C803A1EA857A2B20FFF
 
-当前 ZIP:
-提交相关材料/SquareSumV1.zip
+历史 ZIP:
 提交相关材料/20260730/SquareSumV1.zip
+提交相关材料/历史版本/SquareSumV1_S02E2_before_S02F_20260730-1635.zip
 
 ZIP SHA-256:
 14B3384ED0A5A740808E008BE0D7922BEA9D5A27CD837CE8CFCC0DBD3D196EE9
@@ -733,9 +772,61 @@ ZIP SHA-256:
 D5D0407C7F81519DCE36682D18104D1579BF96642EA898E0706C91550942DBB7
 ```
 
-上述提升只证明公开覆盖矩阵中的 fastPath4 通用路径更快。隐藏 Case 的
-shape、dtype 和 TilingKey 仍未知，必须以上传后的五项平台结果判断
-S02E2 是否命中 Case4/5。
+上述提升只证明公开覆盖矩阵中的 fastPath4 通用路径更快。S02E2 的
+平台结果为 3259.5255 us，相比 S01 只改善 0.70%，因此该路径没有
+命中主要隐藏瓶颈；这不能用于反推隐藏 shape、dtype 或 TilingKey。
+
+### 12.6 SquareSumV1-S02F 当前正式候选
+
+S02F 只优化源码能够直接确认的 fastPath3 结构：旧路径对每个输出逐个
+执行二维 DMA、平方、归约和标量同步；新路径一次处理 8 个连续输出。
+Host 使用严格门控，不满足对齐、连续性、尾长和 stride 条件的形状继续
+运行 S02E2。
+
+候选测试：
+
+```text
+46 directed
+4 bf16 semantic
+4 atomic
+10 workspace
+10 tiling-key
+150 random
+726 extended
+16 grouped-vector8 专项
+合计 966/966 Pass
+```
+
+正式 A/B 中，6 个命中形状逐项改善 21.66%～36.79%，合计改善
+27.18%；未命中尾长 33 对照只有 0.15% 波动。尾长 1024 的早期边界
+错误由专项测试捕获；依据 CANN 8.5.0 的 256B vector repeat 约束，
+新路径上限已收紧为 64，1024 现正确回退。
+
+正式构建与包：
+
+```text
+云端 release:
+/home/ma-user/work/s9/release/squaresum_s02f_20260730_1629
+
+.run SHA-256:
+AAA8096582170BAB688607E40651E8C1D8B9B86E7F889F61948C8D1CE7320563
+
+当前 ZIP:
+提交相关材料/SquareSumV1.zip
+提交相关材料/20260730/S02F_1635/SquareSumV1.zip
+
+ZIP SHA-256:
+EECD9F1FD6B4C0617B6EC2EC632F24BB0F310D5A9D2F2125F03F6EC86ECFAF5B
+
+上一正式包备份:
+提交相关材料/历史版本/SquareSumV1_S02E2_before_S02F_20260730-1635.zip
+
+上一正式包 SHA-256:
+14B3384ED0A5A740808E008BE0D7922BEA9D5A27CD837CE8CFCC0DBD3D196EE9
+```
+
+S02F 的本地 A/B 只能证明该通用路径更快；隐藏 Case 的 shape、dtype 和
+TilingKey 仍未知，最终结论必须等待平台 Case1～Case5。
 
 ## 13. 安全与仓库卫生
 
@@ -755,9 +846,11 @@ git ls-files | grep -Ei '\.(pem|key|run|so|whl|zip)$'
 
 ## 14. 结论边界
 
-当前能够确认的是：五题正式包在官方平台分别 `5/5 Pass`；正式源码、
-云端构建产物、本地提交包、SHA 和验证证据已形成可复现闭环。
+当前能够确认的是：五题上一轮正式包在官方平台分别 `5/5 Pass`；
+SquareSumV1-S02F 的正式源码、云端构建产物、本地提交包、SHA、
+966 例正确性结果和同形状 A/B 已形成可复现闭环。
 
-当前不能确认的是：各题相对头部队伍的差距以及隐藏 Case 的具体 shape/
-dtype/TilingKey。现有总耗时仍不具备竞争力；优化必须依据通用算法和
-实测 profiling，不得把平台 Case 当作可猜测或可硬编码的数据。
+当前不能确认的是：S02F 的平台 `prof_sum`、各题相对头部队伍的最新
+差距以及隐藏 Case 的具体 shape/dtype/TilingKey。现有总耗时仍不具备
+竞争力；优化必须依据通用算法和实测 profiling，不得把平台 Case 当作
+可猜测或可硬编码的数据。

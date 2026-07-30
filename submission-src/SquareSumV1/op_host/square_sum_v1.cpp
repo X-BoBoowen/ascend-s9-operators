@@ -320,9 +320,92 @@ static ge::graphStatus TilingFunc(gert::TilingContext* context)
           reduceElements >= TREE_LAST_REDUCE_THRESHOLD) ||
          (fastPath == 2 &&
           reduceElements >= TREE_MIDDLE_REDUCE_THRESHOLD));
+    uint64_t expectedTrailingStride = 1U;
+    uint32_t firstTrailingAxis = reduceRank;
+    for (int32_t axis =
+             static_cast<int32_t>(reduceRank) - 1;
+         axis >= 0;
+         --axis) {
+        if (reduceInputStrides[axis] !=
+            expectedTrailingStride) {
+            break;
+        }
+        if (!SafeMultiply(
+                expectedTrailingStride,
+                reduceDims[axis],
+                expectedTrailingStride)) {
+            return ge::GRAPH_FAILED;
+        }
+        firstTrailingAxis =
+            static_cast<uint32_t>(axis);
+    }
+    uint32_t innermostOutputAxis = outputRank;
+    for (int32_t axis =
+             static_cast<int32_t>(outputRank) - 1;
+         axis >= 0;
+         --axis) {
+        if (outputDims[axis] > 1U &&
+            outputInputStrides[axis] != 0U) {
+            innermostOutputAxis =
+                static_cast<uint32_t>(axis);
+            break;
+        }
+    }
+    const uint64_t inputTypeBytes =
+        inputDesc->GetDataType() == ge::DT_FLOAT
+            ? sizeof(float)
+            : sizeof(uint16_t);
+    const uint64_t elementsPerBlock =
+        32U / inputTypeBytes;
+    uint64_t vectorInputElements = 0;
+    uint64_t vectorSourceGapBytes = 0;
+    bool groupedVector8 =
+        fastPath == 3U &&
+        reduceMode == 0U &&
+        firstTrailingAxis > 0U &&
+        firstTrailingAxis < reduceRank &&
+        expectedTrailingStride == trailingReduceElements &&
+        innermostOutputAxis < outputRank &&
+        trailingReduceElements > 0U &&
+        trailingReduceElements % elementsPerBlock == 0U &&
+        trailingReduceElements <= 64U &&
+        trailingReduceElements <=
+            static_cast<uint64_t>(
+                std::numeric_limits<int32_t>::max()) &&
+        outputElements % 8U == 0U &&
+        outputDims[innermostOutputAxis] % 8U == 0U &&
+        outputInputStrides[innermostOutputAxis] ==
+            trailingReduceElements &&
+        SafeMultiply(
+            trailingReduceElements,
+            8U,
+            vectorInputElements) &&
+        vectorInputElements <= 8192U;
+    if (groupedVector8) {
+        const uint32_t batchAxis =
+            firstTrailingAxis - 1U;
+        groupedVector8 =
+            reduceDims[batchAxis] > 0U &&
+            reduceInputStrides[batchAxis] >=
+                vectorInputElements &&
+            SafeMultiply(
+                reduceInputStrides[batchAxis] -
+                    vectorInputElements,
+                inputTypeBytes,
+                vectorSourceGapBytes) &&
+            vectorSourceGapBytes <=
+                std::numeric_limits<uint32_t>::max();
+    }
     uint64_t desiredBlocks = 0;
     if (reduceMode != 0U) {
         desiredBlocks = MAX_BLOCK_DIM;
+    } else if (groupedVector8) {
+        const uint64_t vectorTasks =
+            outputElements / 8U;
+        desiredBlocks =
+            vectorTasks < MAX_BLOCK_DIM
+                ? vectorTasks
+                : MAX_BLOCK_DIM;
     } else if (fastPath == 1 || fastPath == 3) {
         const uint32_t fastBlockDim =
             inputElements >= FULL_CORE_INPUT_THRESHOLD
@@ -359,10 +442,14 @@ static ge::graphStatus TilingFunc(gert::TilingContext* context)
     tiling.set_innerElements(innerElements);
     tiling.set_trailingReduceElements(
         trailingReduceElements);
+    const uint64_t scheduledOutputs =
+        groupedVector8
+            ? outputElements / 8U
+            : outputElements;
     tiling.set_baseOutputsPerBlock(
-        outputElements / blockDim);
+        scheduledOutputs / blockDim);
     tiling.set_extraBlocks(static_cast<uint32_t>(
-        outputElements % blockDim));
+        scheduledOutputs % blockDim));
     tiling.set_outputRank(outputRank);
     tiling.set_reduceRank(reduceRank);
     tiling.set_fastPath(fastPath);
@@ -373,9 +460,11 @@ static ge::graphStatus TilingFunc(gert::TilingContext* context)
     tiling.set_reduceInputStrides(reduceInputStrides);
 
     context->SetTilingKey(
-        useTreeFinalize
-            ? (longContiguous ? 4U : 3U)
-            : (longContiguous ? 2U : 1U));
+        groupedVector8
+            ? 5U
+            : (useTreeFinalize
+                ? (longContiguous ? 4U : 3U)
+                : (longContiguous ? 2U : 1U)));
     context->SetBlockDim(blockDim);
     tiling.SaveToBuffer(
         context->GetRawTilingData()->GetData(),

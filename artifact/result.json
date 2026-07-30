@@ -1,9 +1,9 @@
 {
-  "command": "cd /home/ma-user/work/s9/repository/ascend-s9-operators && git restore -- submission-src/SquareSumV1/op_host/square_sum_v1.cpp submission-src/SquareSumV1/op_kernel/CMakeLists.txt submission-src/SquareSumV1/op_kernel/square_sum_v1.cpp validation/SquareSumV1/benchmark_cases.py && git merge --ff-only origin/main && echo CLOUD_HEAD:$(git rev-parse --short HEAD) && git status --short --branch",
+  "command": "set -e; repo=/home/ma-user/work/s9/repository/ascend-s9-operators; cd \"$repo\"; git status --short --branch; git rev-parse HEAD; git remote -v | head -4; sha256sum submission-src/SquareSumV1/op_host/square_sum_v1.cpp submission-src/SquareSumV1/op_kernel/square_sum_v1.cpp 2>/dev/null || true",
   "remote": "ma-user@dev-modelarts.cn-southwest-2.huaweicloud.com:32375",
-  "started_at": "2026-07-30T15:41:56.6129511+08:00",
-  "finished_at": "2026-07-30T15:42:04.3826376+08:00",
-  "duration_ms": 7769.686,
+  "started_at": "2026-07-30T16:41:13.9583901+08:00",
+  "finished_at": "2026-07-30T16:41:19.8032550+08:00",
+  "duration_ms": 5844.865,
   "exit_code": 0,
   "success": true,
   "log": "artifact/run.log"
