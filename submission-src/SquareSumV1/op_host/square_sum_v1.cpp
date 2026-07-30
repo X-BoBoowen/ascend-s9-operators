@@ -21,6 +21,18 @@ bool SafeMultiply(
     return true;
 }
 
+bool SafeAdd(
+    const uint64_t left,
+    const uint64_t right,
+    uint64_t& result)
+{
+    if (right > std::numeric_limits<uint64_t>::max() - left) {
+        return false;
+    }
+    result = left + right;
+    return true;
+}
+
 ge::graphStatus BuildMetadata(
     const gert::Shape& inputShape,
     const gert::RuntimeAttrs* attrs,
@@ -279,6 +291,10 @@ static ge::graphStatus TilingFunc(gert::TilingContext* context)
     constexpr uint64_t WORKSPACE_LAST_MAX_OUTPUTS = 8;
     constexpr uint64_t WORKSPACE_MIDDLE_MAX_OUTPUTS = 1024;
     constexpr uint64_t LONG_CONTIGUOUS_THRESHOLD = 8192;
+    constexpr uint64_t TREE_LAST_REDUCE_THRESHOLD =
+        1U << 20U;
+    constexpr uint64_t TREE_MIDDLE_REDUCE_THRESHOLD =
+        1U << 16U;
     const bool atomicReduce =
         inputDesc->GetDataType() == ge::DT_FLOAT &&
         fastPath == 1 &&
@@ -298,6 +314,12 @@ static ge::graphStatus TilingFunc(gert::TilingContext* context)
     const bool longContiguous =
         fastPath == 1 &&
         reduceElements > LONG_CONTIGUOUS_THRESHOLD;
+    const bool useTreeFinalize =
+        workspaceReduce &&
+        ((fastPath == 1 &&
+          reduceElements >= TREE_LAST_REDUCE_THRESHOLD) ||
+         (fastPath == 2 &&
+          reduceElements >= TREE_MIDDLE_REDUCE_THRESHOLD));
     uint64_t desiredBlocks = 0;
     if (reduceMode != 0U) {
         desiredBlocks = MAX_BLOCK_DIM;
@@ -350,7 +372,10 @@ static ge::graphStatus TilingFunc(gert::TilingContext* context)
     tiling.set_reduceDims(reduceDims);
     tiling.set_reduceInputStrides(reduceInputStrides);
 
-    context->SetTilingKey(longContiguous ? 2U : 1U);
+    context->SetTilingKey(
+        useTreeFinalize
+            ? (longContiguous ? 4U : 3U)
+            : (longContiguous ? 2U : 1U));
     context->SetBlockDim(blockDim);
     tiling.SaveToBuffer(
         context->GetRawTilingData()->GetData(),
@@ -360,16 +385,38 @@ static ge::graphStatus TilingFunc(gert::TilingContext* context)
     if (workspace == nullptr) {
         return ge::GRAPH_FAILED;
     }
-    if (workspaceReduce) {
+    if (atomicReduce || workspaceReduce) {
         const uint64_t partialStride =
             (outputElements + 7U) / 8U * 8U;
+        const uint64_t partialBlocks =
+            workspaceReduce ? blockDim : 1U;
+        uint64_t workspaceElements = 0;
+        uint64_t userWorkspaceBytes = 0;
+        if (!SafeMultiply(
+                partialStride,
+                partialBlocks,
+                workspaceElements) ||
+            !SafeMultiply(
+                workspaceElements,
+                sizeof(float),
+                userWorkspaceBytes)) {
+            return ge::GRAPH_FAILED;
+        }
         const platform_ascendc::PlatformAscendC ascendcPlatform(
             context->GetPlatformInfo());
         const size_t systemWorkspace =
             ascendcPlatform.GetLibApiWorkSpaceSize();
-        workspace[0] = static_cast<size_t>(
-            partialStride * blockDim * sizeof(float)) +
-            systemWorkspace;
+        uint64_t totalWorkspaceBytes = 0;
+        if (!SafeAdd(
+                userWorkspaceBytes,
+                static_cast<uint64_t>(systemWorkspace),
+                totalWorkspaceBytes) ||
+            totalWorkspaceBytes >
+                std::numeric_limits<size_t>::max()) {
+            return ge::GRAPH_FAILED;
+        }
+        workspace[0] =
+            static_cast<size_t>(totalWorkspaceBytes);
     } else {
         workspace[0] = 0;
     }

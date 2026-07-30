@@ -73,7 +73,7 @@ __aicore__ inline bfloat16_t OutputFromFloat<bfloat16_t>(
     return FloatToBfloat16(value);
 }
 
-template <typename T, uint32_t CHUNK>
+template <typename T, uint32_t CHUNK, bool TREE_FINALIZE>
 class KernelSquareSumV1 {
 public:
     __aicore__ inline KernelSquareSumV1() {}
@@ -118,12 +118,15 @@ public:
         outputGm_.SetGlobalBuffer(
             reinterpret_cast<__gm__ T*>(output),
             outputElements_);
-        if (reduceMode_ == 2U) {
+        if (reduceMode_ != 0U) {
             partialStride_ =
                 (outputElements_ + 7U) / 8U * 8U;
             workspaceGm_.SetGlobalBuffer(
                 reinterpret_cast<__gm__ float*>(workspace),
-                partialStride_ * AscendC::GetBlockNum());
+                partialStride_ *
+                    (reduceMode_ == 2U
+                        ? AscendC::GetBlockNum()
+                        : 1U));
         }
         pipe_.InitBuffer(
             outputBuffer_,
@@ -151,6 +154,9 @@ public:
             pipe_.FetchEventID(AscendC::HardEvent::V_MTE3));
         mte3ToVEvent_ = static_cast<event_t>(
             pipe_.FetchEventID(AscendC::HardEvent::MTE3_V));
+        mte2ToMte3Event_ = static_cast<event_t>(
+            pipe_.FetchEventID(
+                AscendC::HardEvent::MTE2_MTE3));
         sToMte3Event_ = static_cast<event_t>(
             pipe_.FetchEventID(AscendC::HardEvent::S_MTE3));
         mte3ToSEvent_ = static_cast<event_t>(
@@ -292,7 +298,11 @@ private:
         }
         AscendC::SyncAll<true>();
         if (blockIdx == 0U) {
-            FinalizeParallelReduction();
+            if constexpr (TREE_FINALIZE) {
+                FinalizeParallelReductionTree();
+            } else {
+                FinalizeParallelReductionSequential();
+            }
         }
     }
 
@@ -520,7 +530,7 @@ private:
         }
     }
 
-    __aicore__ inline void FinalizeParallelReduction()
+    __aicore__ inline void FinalizeParallelReductionSequential()
     {
         AscendC::LocalTensor<T> outputLocal =
             outputBuffer_.Get<T>();
@@ -549,7 +559,8 @@ private:
                  ++block) {
                 AscendC::DataCopyExtParams copyParams;
                 copyParams.blockCount = 1;
-                copyParams.blockLen = current * sizeof(float);
+                copyParams.blockLen =
+                    current * sizeof(float);
                 copyParams.srcStride = 0;
                 copyParams.dstStride = 0;
                 AscendC::DataCopyPadExtParams<float> padParams;
@@ -624,6 +635,134 @@ private:
         }
     }
 
+    __aicore__ inline void FinalizeParallelReductionTree()
+    {
+        AscendC::LocalTensor<T> outputLocal =
+            outputBuffer_.Get<T>();
+        AscendC::LocalTensor<float> valueLocal =
+            floatBuffer_.Get<float>();
+        AscendC::LocalTensor<float> accumulateLocal =
+            reduceWorkBuffer_.Get<float>();
+        const uint32_t blockNum =
+            AscendC::GetBlockNum();
+        uint32_t reductionRows = 1U;
+        while (reductionRows < blockNum) {
+            reductionRows <<= 1U;
+        }
+        uint32_t finalTileOutputs =
+            CHUNK / reductionRows;
+        if (finalTileOutputs > TILE_OUTPUTS) {
+            finalTileOutputs = TILE_OUTPUTS;
+        }
+        finalTileOutputs =
+            finalTileOutputs / 8U * 8U;
+        if (finalTileOutputs == 0U) {
+            finalTileOutputs = 8U;
+        }
+
+        for (uint64_t outputStart = 0;
+             outputStart < outputElements_;
+             outputStart += finalTileOutputs) {
+            const uint32_t current = static_cast<uint32_t>(
+                outputElements_ - outputStart <
+                        finalTileOutputs
+                    ? outputElements_ - outputStart
+                    : finalTileOutputs);
+            const uint32_t floatPadded =
+                (current + 7U) / 8U * 8U;
+            AscendC::DataCopyExtParams copyParams;
+            copyParams.blockCount =
+                static_cast<uint16_t>(blockNum);
+            copyParams.blockLen =
+                current * sizeof(float);
+            copyParams.srcStride =
+                static_cast<uint32_t>(
+                    (partialStride_ - current) *
+                    sizeof(float));
+            copyParams.dstStride = 0;
+            AscendC::DataCopyPadExtParams<float> padParams;
+            padParams.isPad = floatPadded != current;
+            padParams.leftPadding = 0;
+            padParams.rightPadding =
+                static_cast<uint8_t>(
+                    floatPadded - current);
+            padParams.paddingValue = 0.0f;
+            AscendC::DataCopyPad(
+                valueLocal,
+                workspaceGm_[outputStart],
+                copyParams,
+                padParams);
+            AscendC::Duplicate(
+                accumulateLocal,
+                0.0f,
+                floatPadded);
+            if (reductionRows > blockNum) {
+                AscendC::Duplicate(
+                    valueLocal[
+                        blockNum * floatPadded],
+                    0.0f,
+                    (reductionRows - blockNum) *
+                        floatPadded);
+            }
+            AscendC::SetFlag<
+                AscendC::HardEvent::MTE2_V>(
+                mte2ToVEvent_);
+            AscendC::WaitFlag<
+                AscendC::HardEvent::MTE2_V>(
+                mte2ToVEvent_);
+            ReduceRowsInto(
+                valueLocal,
+                accumulateLocal,
+                reductionRows,
+                floatPadded,
+                floatPadded);
+            AscendC::SetFlag<
+                AscendC::HardEvent::V_MTE2>(
+                vToMte2Event_);
+            AscendC::WaitFlag<
+                AscendC::HardEvent::V_MTE2>(
+                vToMte2Event_);
+
+            if constexpr (std::is_same<T, float>::value) {
+                AscendC::Adds(
+                    outputLocal,
+                    accumulateLocal,
+                    0.0f,
+                    floatPadded);
+            } else if constexpr (
+                std::is_same<T, half>::value) {
+                AscendC::Cast(
+                    outputLocal,
+                    accumulateLocal,
+                    AscendC::RoundMode::CAST_NONE,
+                    floatPadded);
+            } else {
+                AscendC::Cast(
+                    outputLocal,
+                    accumulateLocal,
+                    AscendC::RoundMode::CAST_RINT,
+                    floatPadded);
+            }
+            AscendC::SetFlag<AscendC::HardEvent::V_MTE3>(
+                vToMte3Event_);
+            AscendC::WaitFlag<AscendC::HardEvent::V_MTE3>(
+                vToMte3Event_);
+            AscendC::DataCopyExtParams outputCopy;
+            outputCopy.blockCount = 1;
+            outputCopy.blockLen = current * sizeof(T);
+            outputCopy.srcStride = 0;
+            outputCopy.dstStride = 0;
+            AscendC::DataCopyPad(
+                outputGm_[outputStart],
+                outputLocal,
+                outputCopy);
+            AscendC::SetFlag<AscendC::HardEvent::MTE3_V>(
+                mte3ToVEvent_);
+            AscendC::WaitFlag<AscendC::HardEvent::MTE3_V>(
+                mte3ToVEvent_);
+        }
+    }
+
     __aicore__ inline void ProcessAtomicReduction()
     {
         AscendC::LocalTensor<T> outputLocal =
@@ -642,7 +781,7 @@ private:
             AscendC::WaitFlag<AscendC::HardEvent::V_MTE3>(
                 vToMte3Event_);
             AscendC::DataCopy(
-                outputGm_,
+                workspaceGm_,
                 outputLocal,
                 alignedOutputs);
             AscendC::SetFlag<AscendC::HardEvent::MTE3_S>(
@@ -680,7 +819,7 @@ private:
             sToMte3Event_);
         AscendC::SetAtomicAdd<T>();
         AscendC::DataCopy(
-            outputGm_,
+            workspaceGm_,
             outputLocal,
             alignedOutputs);
         AscendC::SetAtomicNone();
@@ -688,6 +827,34 @@ private:
             mte3ToSEvent_);
         AscendC::WaitFlag<AscendC::HardEvent::MTE3_S>(
             mte3ToSEvent_);
+        AscendC::SyncAll<true>();
+
+        if (blockIdx == 0U) {
+            AscendC::DataCopy(
+                outputLocal,
+                workspaceGm_,
+                alignedOutputs);
+            AscendC::SetFlag<
+                AscendC::HardEvent::MTE2_MTE3>(
+                mte2ToMte3Event_);
+            AscendC::WaitFlag<
+                AscendC::HardEvent::MTE2_MTE3>(
+                mte2ToMte3Event_);
+            AscendC::DataCopyExtParams outputCopy;
+            outputCopy.blockCount = 1;
+            outputCopy.blockLen =
+                outputElements_ * sizeof(T);
+            outputCopy.srcStride = 0;
+            outputCopy.dstStride = 0;
+            AscendC::DataCopyPad(
+                outputGm_,
+                outputLocal,
+                outputCopy);
+            AscendC::SetFlag<AscendC::HardEvent::MTE3_S>(
+                mte3ToSEvent_);
+            AscendC::WaitFlag<AscendC::HardEvent::MTE3_S>(
+                mte3ToSEvent_);
+        }
     }
 
     __aicore__ inline bool CanUseStridedInnerBulk() const
@@ -756,6 +923,8 @@ private:
             if (reduceRowsPerTile > 4095U) {
                 reduceRowsPerTile = 4095U;
             }
+            reduceRowsPerTile =
+                HighestPowerOfTwo(reduceRowsPerTile);
             AscendC::Duplicate(
                 accumulateLocal,
                 0.0f,
@@ -767,17 +936,27 @@ private:
                  ++group) {
                 const uint64_t groupReduceStart =
                     group * lastReduceDim;
-                for (uint64_t rowOffset = 0;
-                     rowOffset < lastReduceDim;
-                     rowOffset += reduceRowsPerTile) {
-                    const uint32_t currentReduceRows =
+                uint64_t rowOffset = 0;
+                while (rowOffset < lastReduceDim) {
+                    const uint32_t remainingRows =
                         static_cast<uint32_t>(
                             lastReduceDim - rowOffset <
                                     reduceRowsPerTile
                                 ? lastReduceDim - rowOffset
                                 : reduceRowsPerTile);
+                    const uint32_t currentReduceRows =
+                        remainingRows;
+                    uint32_t reductionRows = 1U;
+                    while (reductionRows <
+                           currentReduceRows) {
+                        reductionRows <<= 1U;
+                    }
                     const uint32_t inputCount =
                         currentReduceRows * paddedInner;
+                    const uint32_t paddedRowElements =
+                        (reductionRows -
+                         currentReduceRows) *
+                        paddedInner;
                     const uint64_t inputStart =
                         baseInputOffset +
                         ReduceInputOffset(
@@ -824,16 +1003,18 @@ private:
                             inputLocal,
                             inputLocal,
                             inputCount);
-                        for (uint32_t row = 0;
-                             row < currentReduceRows;
-                             ++row) {
-                            AscendC::Add(
-                                accumulateLocal,
-                                accumulateLocal,
-                                inputLocal[
-                                    row * paddedInner],
-                                floatPadded);
+                        if (paddedRowElements != 0U) {
+                            AscendC::Duplicate(
+                                inputLocal[inputCount],
+                                0.0f,
+                                paddedRowElements);
                         }
+                        ReduceRowsInto(
+                            inputLocal,
+                            accumulateLocal,
+                            reductionRows,
+                            paddedInner,
+                            floatPadded);
                     } else if constexpr (
                         std::is_same<T, half>::value) {
                         AscendC::Mul(
@@ -846,16 +1027,18 @@ private:
                             inputLocal,
                             AscendC::RoundMode::CAST_NONE,
                             inputCount);
-                        for (uint32_t row = 0;
-                             row < currentReduceRows;
-                             ++row) {
-                            AscendC::Add(
-                                accumulateLocal,
-                                accumulateLocal,
-                                valueLocal[
-                                    row * paddedInner],
-                                floatPadded);
+                        if (paddedRowElements != 0U) {
+                            AscendC::Duplicate(
+                                valueLocal[inputCount],
+                                0.0f,
+                                paddedRowElements);
                         }
+                        ReduceRowsInto(
+                            valueLocal,
+                            accumulateLocal,
+                            reductionRows,
+                            paddedInner,
+                            floatPadded);
                     } else {
                         AscendC::Cast(
                             valueLocal,
@@ -877,16 +1060,18 @@ private:
                             inputLocal,
                             AscendC::RoundMode::CAST_NONE,
                             inputCount);
-                        for (uint32_t row = 0;
-                             row < currentReduceRows;
-                             ++row) {
-                            AscendC::Add(
-                                accumulateLocal,
-                                accumulateLocal,
-                                valueLocal[
-                                    row * paddedInner],
-                                floatPadded);
+                        if (paddedRowElements != 0U) {
+                            AscendC::Duplicate(
+                                valueLocal[inputCount],
+                                0.0f,
+                                paddedRowElements);
                         }
+                        ReduceRowsInto(
+                            valueLocal,
+                            accumulateLocal,
+                            reductionRows,
+                            paddedInner,
+                            floatPadded);
                     }
                     AscendC::SetFlag<
                         AscendC::HardEvent::V_MTE2>(
@@ -894,6 +1079,7 @@ private:
                     AscendC::WaitFlag<
                         AscendC::HardEvent::V_MTE2>(
                         vToMte2Event_);
+                    rowOffset += currentReduceRows;
                 }
             }
 
@@ -1992,6 +2178,7 @@ private:
     event_t vToMte2Event_;
     event_t vToMte3Event_;
     event_t mte3ToVEvent_;
+    event_t mte2ToMte3Event_;
 };
 
 extern "C" __global__ __aicore__ void square_sum_v1(
@@ -2006,10 +2193,13 @@ extern "C" __global__ __aicore__ void square_sum_v1(
             return;
         }
         GM_ADDR userWorkspace =
-            tilingData.reduceMode == 2U
+            tilingData.reduceMode != 0U
                 ? AscendC::GetUserWorkspace(workspace)
                 : workspace;
-        KernelSquareSumV1<DTYPE_INPUT, NORMAL_CHUNK> op;
+        KernelSquareSumV1<
+            DTYPE_INPUT,
+            NORMAL_CHUNK,
+            false> op;
         op.Init(input, output, userWorkspace, tilingData);
         op.Process();
     } else if (TILING_KEY_IS(2)) {
@@ -2018,10 +2208,43 @@ extern "C" __global__ __aicore__ void square_sum_v1(
             return;
         }
         GM_ADDR userWorkspace =
-            tilingData.reduceMode == 2U
+            tilingData.reduceMode != 0U
                 ? AscendC::GetUserWorkspace(workspace)
                 : workspace;
-        KernelSquareSumV1<DTYPE_INPUT, LONG_CHUNK> op;
+        KernelSquareSumV1<
+            DTYPE_INPUT,
+            LONG_CHUNK,
+            false> op;
+        op.Init(input, output, userWorkspace, tilingData);
+        op.Process();
+    } else if (TILING_KEY_IS(3)) {
+        GET_TILING_DATA(tilingData, tiling);
+        if (tilingData.outputElements == 0) {
+            return;
+        }
+        GM_ADDR userWorkspace =
+            tilingData.reduceMode != 0U
+                ? AscendC::GetUserWorkspace(workspace)
+                : workspace;
+        KernelSquareSumV1<
+            DTYPE_INPUT,
+            NORMAL_CHUNK,
+            true> op;
+        op.Init(input, output, userWorkspace, tilingData);
+        op.Process();
+    } else if (TILING_KEY_IS(4)) {
+        GET_TILING_DATA(tilingData, tiling);
+        if (tilingData.outputElements == 0) {
+            return;
+        }
+        GM_ADDR userWorkspace =
+            tilingData.reduceMode != 0U
+                ? AscendC::GetUserWorkspace(workspace)
+                : workspace;
+        KernelSquareSumV1<
+            DTYPE_INPUT,
+            LONG_CHUNK,
+            true> op;
         op.Init(input, output, userWorkspace, tilingData);
         op.Process();
     }

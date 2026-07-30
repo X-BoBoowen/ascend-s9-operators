@@ -1,9 +1,9 @@
 {
-  "command": "set -e\nrepo=/home/ma-user/work/s9/repository/ascend-s9-operators\necho 'CLOUD_SYNC_BEFORE'\ngit -C \"$repo\" branch --show-current\ngit -C \"$repo\" rev-parse HEAD\nif test -n \"$(git -C \"$repo\" status --porcelain --untracked-files=no)\"; then\n  echo 'Tracked cloud changes detected; refusing to overwrite.' >&2\n  git -C \"$repo\" status --short\n  exit 2\nfi\ngit -C \"$repo\" fetch origin main\ngit -C \"$repo\" merge --ff-only origin/main\necho 'CLOUD_SYNC_AFTER'\ngit -C \"$repo\" rev-parse HEAD\ngit -C \"$repo\" status --short",
+  "command": "source /home/ma-user/Ascend/cann-8.5.0/bin/setenv.bash && source /home/ma-user/Ascend/cann-8.5.0/opp/vendors/customize/bin/set_env.bash && cd /home/ma-user/work/s9/repository/ascend-s9-operators/validation/SquareSumV1 && python3 benchmark_cases.py multi_bf16 strided_tree_fp16 strided_tree_bf16 strided_tree_fp32",
   "remote": "ma-user@dev-modelarts.cn-southwest-2.huaweicloud.com:32375",
-  "started_at": "2026-07-29T20:55:45.5328794+08:00",
-  "finished_at": "2026-07-29T20:55:54.7050773+08:00",
-  "duration_ms": 9172.198,
+  "started_at": "2026-07-30T15:35:10.8225496+08:00",
+  "finished_at": "2026-07-30T15:35:39.2208951+08:00",
+  "duration_ms": 28398.346,
   "exit_code": 0,
   "success": true,
   "log": "artifact/run.log"

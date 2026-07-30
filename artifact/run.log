@@ -1,19 +1,5 @@
 
-[2026-07-29 20:55:53 +0800] $ set -e
-repo=/home/ma-user/work/s9/repository/ascend-s9-operators
-echo 'CLOUD_SYNC_BEFORE'
-git -C "$repo" branch --show-current
-git -C "$repo" rev-parse HEAD
-if test -n "$(git -C "$repo" status --porcelain --untracked-files=no)"; then
-  echo 'Tracked cloud changes detected; refusing to overwrite.' >&2
-  git -C "$repo" status --short
-  exit 2
-fi
-git -C "$repo" fetch origin main
-git -C "$repo" merge --ff-only origin/main
-echo 'CLOUD_SYNC_AFTER'
-git -C "$repo" rev-parse HEAD
-git -C "$repo" status --short
+[2026-07-30 15:35:17 +0800] $ source /home/ma-user/Ascend/cann-8.5.0/bin/setenv.bash && source /home/ma-user/Ascend/cann-8.5.0/opp/vendors/customize/bin/set_env.bash && cd /home/ma-user/work/s9/repository/ascend-s9-operators/validation/SquareSumV1 && python3 benchmark_cases.py multi_bf16 strided_tree_fp16 strided_tree_bf16 strided_tree_fp32
 The environment has been set
 The environment has been set
  __  __               _          _                      _
@@ -29,24 +15,7 @@ Tips:
 2) Copy (Ctrl+C) and paste (Ctrl+V) on the jupyter terminal.
 3) Store your data in /home/ma-user/work, to which a persistent volume is mounted.
 4) Exercise caution when using plaintext passwords, hard-coded AK/SK, or directly entering them in the command line.
-CLOUD_SYNC_BEFORE
-main
-7e08dc7522d6f0e093062a73d8636539819ca783
-From https://github.com/X-BoBoowen/ascend-s9-operators
- * branch            main       -> FETCH_HEAD
-   7e08dc7..1902bfd  main       -> origin/main
-Updating 7e08dc7..1902bfd
-Fast-forward
- .gitignore           |  5 +++
- README.md            | 27 +++++++++++----
- artifact/result.json | 10 ++++++
- artifact/run.log     | 34 +++++++++++++++++++
- ssh_visible.ps1      | 93 ++++++++++++++++++++++++++++++++++++++++++++++++++++
- 5 files changed, 162 insertions(+), 7 deletions(-)
- create mode 100644 artifact/result.json
- create mode 100644 artifact/run.log
- create mode 100644 ssh_visible.ps1
-CLOUD_SYNC_AFTER
-1902bfd7dda3cb60dbef2d5dea28e97b4384ca84
-?? validation/Transpose/common/
-?? validation/common/
+multi_bf16: median_us=24.567, trials_us=[24.549, 25.956, 24.934, 24.346, 24.567]
+strided_tree_fp16: median_us=82.364, trials_us=[82.218, 82.548, 82.325, 82.364, 82.509]
+strided_tree_bf16: median_us=85.148, trials_us=[84.964, 85.405, 85.148, 85.103, 85.158]
+strided_tree_fp32: median_us=77.155, trials_us=[77.086, 77.155, 77.201, 77.275, 77.126]
