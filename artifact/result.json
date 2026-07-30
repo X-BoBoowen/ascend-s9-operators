@@ -1,9 +1,9 @@
 {
-  "command": "source /home/ma-user/Ascend/cann-8.5.0/bin/setenv.bash && source /home/ma-user/Ascend/cann-8.5.0/opp/vendors/customize/bin/set_env.bash && cd /home/ma-user/work/s9/repository/ascend-s9-operators/validation/SquareSumV1 && python3 benchmark_cases.py multi_bf16 strided_tree_fp16 strided_tree_bf16 strided_tree_fp32",
+  "command": "cd /home/ma-user/work/s9/repository/ascend-s9-operators && git restore -- submission-src/SquareSumV1/op_host/square_sum_v1.cpp submission-src/SquareSumV1/op_kernel/CMakeLists.txt submission-src/SquareSumV1/op_kernel/square_sum_v1.cpp validation/SquareSumV1/benchmark_cases.py && git merge --ff-only origin/main && echo CLOUD_HEAD:$(git rev-parse --short HEAD) && git status --short --branch",
   "remote": "ma-user@dev-modelarts.cn-southwest-2.huaweicloud.com:32375",
-  "started_at": "2026-07-30T15:35:10.8225496+08:00",
-  "finished_at": "2026-07-30T15:35:39.2208951+08:00",
-  "duration_ms": 28398.346,
+  "started_at": "2026-07-30T15:41:56.6129511+08:00",
+  "finished_at": "2026-07-30T15:42:04.3826376+08:00",
+  "duration_ms": 7769.686,
   "exit_code": 0,
   "success": true,
   "log": "artifact/run.log"
