@@ -1,9 +1,9 @@
 {
-  "command": "set -e; repo=/home/ma-user/work/s9/repository/ascend-s9-operators; git -C \"$repo\" pull --ff-only origin main; test \"$(git -C \"$repo\" rev-parse --short HEAD)\" = \"d0ad7f2\"; git -C \"$repo\" status --short --branch | head -n 20",
+  "command": "cd /home/ma-user/work/s9/repository/ascend-s9-operators && run_file=$(find /home/ma-user/work/s9/experiments/squaresum_s02ba_cloud_20260805_1633 -type f -name 'custom_opp_euleros_aarch64.run' -print -quit) && test -n \"$run_file\" && printf 'CLOUD_HEAD=' && git rev-parse HEAD && printf 'ORIGIN_MAIN=' && git rev-parse origin/main && test -z \"$(git status --short --untracked-files=no)\" && printf 'TRACKED_STATUS=CLEAN\\n' && printf 'RUN_PATH=%s\\n' \"$run_file\" && sha256sum \"$run_file\" && stat -c 'RUN_BYTES=%s' \"$run_file\" && test \"$(sha256sum \"$run_file\" | cut -d' ' -f1)\" = '71f9895392c989317ff6f1ca22391fe4d6cb6948f06955bdfa43d9c79208e194' && printf 'S02BA_RUN_IDENTITY=PASS\\n' && test \"$(sha256sum candidates/squaresum_s02ba_singleton_gap_threshold_20260805/SquareSumV1/op_host/square_sum_v1.cpp | cut -d' ' -f1)\" = 'a13c736257abef5de9aa402d5ac547c76c257d1bfe4ac7dddaea79a11e376ac0' && test \"$(sha256sum candidates/squaresum_s02ba_singleton_gap_threshold_20260805/SquareSumV1/op_kernel/square_sum_v1.cpp | cut -d' ' -f1)\" = '270c4254d068d199c47e3d2e7160921c8c649a2ddb44f336c6b518e9e1d48197' && printf 'S02BA_SOURCE_IDENTITY=PASS\\n'",
   "remote": "ma-user@dev-modelarts.cn-southwest-2.huaweicloud.com:32375",
-  "started_at": "2026-08-05T16:13:10.6659706+08:00",
-  "finished_at": "2026-08-05T16:13:19.7682282+08:00",
-  "duration_ms": 9102.258,
+  "started_at": "2026-08-05T16:47:35.6627509+08:00",
+  "finished_at": "2026-08-05T16:47:44.3593998+08:00",
+  "duration_ms": 8696.649,
   "exit_code": 0,
   "success": true,
   "log": "artifact/run.log"
