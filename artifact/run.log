@@ -1,5 +1,17 @@
 
-[2026-08-05 16:47:43 +0800] $ cd /home/ma-user/work/s9/repository/ascend-s9-operators && run_file=$(find /home/ma-user/work/s9/experiments/squaresum_s02ba_cloud_20260805_1633 -type f -name 'custom_opp_euleros_aarch64.run' -print -quit) && test -n "$run_file" && printf 'CLOUD_HEAD=' && git rev-parse HEAD && printf 'ORIGIN_MAIN=' && git rev-parse origin/main && test -z "$(git status --short --untracked-files=no)" && printf 'TRACKED_STATUS=CLEAN\n' && printf 'RUN_PATH=%s\n' "$run_file" && sha256sum "$run_file" && stat -c 'RUN_BYTES=%s' "$run_file" && test "$(sha256sum "$run_file" | cut -d' ' -f1)" = '71f9895392c989317ff6f1ca22391fe4d6cb6948f06955bdfa43d9c79208e194' && printf 'S02BA_RUN_IDENTITY=PASS\n' && test "$(sha256sum candidates/squaresum_s02ba_singleton_gap_threshold_20260805/SquareSumV1/op_host/square_sum_v1.cpp | cut -d' ' -f1)" = 'a13c736257abef5de9aa402d5ac547c76c257d1bfe4ac7dddaea79a11e376ac0' && test "$(sha256sum candidates/squaresum_s02ba_singleton_gap_threshold_20260805/SquareSumV1/op_kernel/square_sum_v1.cpp | cut -d' ' -f1)" = '270c4254d068d199c47e3d2e7160921c8c649a2ddb44f336c6b518e9e1d48197' && printf 'S02BA_SOURCE_IDENTITY=PASS\n'
+[2026-08-05 17:09:18 +0800] $ set -euo pipefail
+repo=/home/ma-user/work/s9/repository/ascend-s9-operators
+exp=/home/ma-user/work/s9/experiments/squaresum_s02bb_cloud_20260805_1654
+opp=/home/ma-user/Ascend/cann-8.5.0/opp/vendors/customize
+export ASCEND_CUSTOM_OPP_PATH="${ASCEND_CUSTOM_OPP_PATH-}"
+source "$opp/bin/set_env.bash"
+export PYTHONPATH="$repo/validation/SquareSumV1:$PYTHONPATH"
+python3 "$repo/diagnostics/squaresum_singleton_gap_correctness_20260805.py" > "$exp/singleton_gap_correctness.log" 2>&1
+tail -n 2 "$exp/singleton_gap_correctness.log"
+python3 "$repo/diagnostics/squaresum_singleton_middle_crossover_20260805.py" --label s02bb > "$exp/singleton_middle_crossover.log" 2>&1
+tail -n 2 "$exp/singleton_middle_crossover.log"
+python3 "$repo/diagnostics/squaresum_singleton_gap_cloud_sweep_20260805.py" --label s02bb > "$exp/singleton_gap_sweep.log" 2>&1
+tail -n 2 "$exp/singleton_gap_sweep.log"
 The environment has been set
 The environment has been set
  __  __               _          _                      _
@@ -15,11 +27,9 @@ Tips:
 2) Copy (Ctrl+C) and paste (Ctrl+V) on the jupyter terminal.
 3) Store your data in /home/ma-user/work, to which a persistent volume is mounted.
 4) Exercise caution when using plaintext passwords, hard-coded AK/SK, or directly entering them in the command line.
-CLOUD_HEAD=f13ee054f9be9d5d29ecee7c5a61786ecdb596f8
-ORIGIN_MAIN=f13ee054f9be9d5d29ecee7c5a61786ecdb596f8
-TRACKED_STATUS=CLEAN
-RUN_PATH=/home/ma-user/work/s9/experiments/squaresum_s02ba_cloud_20260805_1633/build_out/custom_opp_euleros_aarch64.run
-71f9895392c989317ff6f1ca22391fe4d6cb6948f06955bdfa43d9c79208e194  /home/ma-user/work/s9/experiments/squaresum_s02ba_cloud_20260805_1633/build_out/custom_opp_euleros_aarch64.run
-RUN_BYTES=594182
-S02BA_RUN_IDENTITY=PASS
-S02BA_SOURCE_IDENTITY=PASS
+PASS 72/72: shape=(128, 1, 64, 64), axes=(0, 2), dtype=torch.float32, keep_dims=True
+SUMMARY_SINGLETON_CORRECTNESS=72/72
+{"kind": "singleton_middle_crossover", "label": "s02bb", "shape": [200, 1, 1000, 64], "dtype": "float32", "reduce_elements": 200000, "outputs": 64, "elements": 12800000, "repeats": 5, "median_us": 53.412002, "samples_us": [47.648001, 53.412002, 52.344, 56.636, 53.715998, 52.424002, 53.552002]}
+SUMMARY_CROSSOVER=30/30
+{"kind": "singleton_gap_sweep", "label": "s02bb", "case": "multi_gap", "shape": [16, 1, 32, 1, 128], "axes": [0, 2, 4], "dtype": "float32", "elements": 65536, "outputs": 1, "repeats": 60, "median_us": 29.72, "effective_gbps": 8.820457, "samples_us": [29.075332, 26.112334, 27.601999, 45.479333, 31.337667, 30.673667, 29.72]}
+SUMMARY_SINGLETON_GAP=15/15
