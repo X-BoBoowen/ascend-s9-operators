@@ -11,13 +11,6 @@ import square_sum_v1_validation_lib
 torch.npu.config.allow_internal_format = False
 SEED = 2026080514
 
-CASES = tuple(
-    (outputs, total // outputs)
-    for total in (1 << 18, 1 << 20, 1 << 22)
-    for outputs in (1, 2, 4, 8)
-)
-
-
 def run_once(input_npu, outputs, reduce):
     return square_sum_v1_validation_lib.square_sum_v1(
         input_npu,
@@ -30,10 +23,23 @@ def run_once(input_npu, outputs, reduce):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--label", required=True)
+    parser.add_argument(
+        "--totals",
+        default=str(1 << 18) + "," + str(1 << 20) + "," + str(1 << 22),
+    )
+    parser.add_argument("--outputs", default="1,2,4,8")
     args = parser.parse_args()
 
+    totals = tuple(int(value) for value in args.totals.split(","))
+    output_counts = tuple(int(value) for value in args.outputs.split(","))
+    cases = tuple(
+        (outputs, total // outputs)
+        for total in totals
+        for outputs in output_counts
+    )
+
     passed = 0
-    for case_index, (outputs, reduce) in enumerate(CASES):
+    for case_index, (outputs, reduce) in enumerate(cases):
         generator = torch.Generator().manual_seed(SEED + case_index)
         input_cpu = (
             torch.rand(
@@ -87,7 +93,7 @@ def main():
                 ensure_ascii=False,
             )
         )
-    print(f"SUMMARY_SWEEP={passed}/{len(CASES)}")
+    print(f"SUMMARY_SWEEP={passed}/{len(cases)}")
 
 
 if __name__ == "__main__":
