@@ -39,13 +39,13 @@ def source_contract():
     assert "NONCONTIGUOUS_SPLITK_MAX_TAIL = 16384U" in host
     assert "NONCONTIGUOUS_SPLITK_MAX_OUTPUTS = 8U" in host
     assert "expectedTrailingStride == trailingReduceElements" in host
-    assert "? 14U" in host
+    assert "noncontiguousSplitK\n            ? 4U" in host
     assert "reduceMode = 3U" in host
     assert "reduceMode_ == 2U || reduceMode_ == 3U" in kernel
     assert "GetSplitKRange" in kernel
     assert "batchRow % batchDim" in kernel
     assert "rowsUntilGroupEnd" in kernel
-    assert "TILING_KEY_IS(14)" in kernel
+    assert "TILING_KEY_IS(14)" not in kernel
     assert "ProcessStridedInnerBulk();" in kernel
     for forbidden in ("Case1", "Case2", "Case3", "Case4", "Case5"):
         assert forbidden not in host
@@ -78,7 +78,7 @@ def main():
     gate_model()
     print("SOURCE_SCOPE=PASS")
     print("SPLITK_FAST_PATH=3")
-    print("SPLITK_TILING_KEY=14")
+    print("SPLITK_TILING_KEY=4")
     print("SPLITK_ROWS_MIN=16")
     print("SPLITK_TAIL_RANGE=1024..16384")
     print("SUMMARY: S02BI fastPath3 split-K static audit passed")

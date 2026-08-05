@@ -4553,21 +4553,5 @@ extern "C" __global__ __aicore__ void square_sum_v1(
             true> op;
         op.Init(input, output, workspace, tilingData);
         op.Process();
-    } else if (TILING_KEY_IS(14)) {
-        GET_TILING_DATA(tilingData, tiling);
-        if (tilingData.outputElements == 0) {
-            return;
-        }
-        GM_ADDR userWorkspace =
-            AscendC::GetUserWorkspace(workspace);
-        KernelSquareSumV1<
-            DTYPE_INPUT,
-            LONG_CHUNK,
-            true,
-            false,
-            false,
-            8U> op;
-        op.Init(input, output, userWorkspace, tilingData);
-        op.Process();
     }
 }

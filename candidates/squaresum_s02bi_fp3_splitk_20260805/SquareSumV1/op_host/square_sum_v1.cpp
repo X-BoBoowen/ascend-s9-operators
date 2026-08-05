@@ -954,7 +954,7 @@ static ge::graphStatus TilingFunc(gert::TilingContext* context)
         reduceElements == 0U
             ? 13U
             : (noncontiguousSplitK
-            ? 14U
+            ? 4U
             : (lastVector8
             ? 7U
             : (lastVector4
