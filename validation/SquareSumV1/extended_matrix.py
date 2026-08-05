@@ -45,6 +45,12 @@ def run_case(name, input_cpu, axes, keep_dims):
             f"axes={axes}, keep_dims={keep_dims}"
         ),
     )
+    print(
+        f"PASS {name}: dtype={input_cpu.dtype}, "
+        f"shape={tuple(input_cpu.shape)}, axes={axes}, "
+        f"keep_dims={keep_dims}",
+        flush=True,
+    )
 
 
 def random_input(shape, dtype):
