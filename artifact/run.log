@@ -1,17 +1,5 @@
 
-[2026-08-05 17:09:18 +0800] $ set -euo pipefail
-repo=/home/ma-user/work/s9/repository/ascend-s9-operators
-exp=/home/ma-user/work/s9/experiments/squaresum_s02bb_cloud_20260805_1654
-opp=/home/ma-user/Ascend/cann-8.5.0/opp/vendors/customize
-export ASCEND_CUSTOM_OPP_PATH="${ASCEND_CUSTOM_OPP_PATH-}"
-source "$opp/bin/set_env.bash"
-export PYTHONPATH="$repo/validation/SquareSumV1:$PYTHONPATH"
-python3 "$repo/diagnostics/squaresum_singleton_gap_correctness_20260805.py" > "$exp/singleton_gap_correctness.log" 2>&1
-tail -n 2 "$exp/singleton_gap_correctness.log"
-python3 "$repo/diagnostics/squaresum_singleton_middle_crossover_20260805.py" --label s02bb > "$exp/singleton_middle_crossover.log" 2>&1
-tail -n 2 "$exp/singleton_middle_crossover.log"
-python3 "$repo/diagnostics/squaresum_singleton_gap_cloud_sweep_20260805.py" --label s02bb > "$exp/singleton_gap_sweep.log" 2>&1
-tail -n 2 "$exp/singleton_gap_sweep.log"
+[2026-08-05 18:51:01 +0800] $ set -e; ROOT=/home/ma-user/work/s9/repository/ascend-s9-operators; EXP=/home/ma-user/work/s9/experiments/squaresum_s02bf_cloud_20260805_1842; REL=/home/ma-user/work/s9/releases/squaresum_s02bf_20260805_1850; test ! -e "$REL"; mkdir -p "$REL/SquareSumV1_zip"; cp -a "$ROOT/candidates/squaresum_s02bf_empty_tiling_key_20260805/SquareSumV1/op_host" "$ROOT/candidates/squaresum_s02bf_empty_tiling_key_20260805/SquareSumV1/op_kernel" "$REL/SquareSumV1_zip/"; cp -p "$EXP/build_out/custom_opp_euleros_aarch64.run" "$REL/SquareSumV1_zip/"; cd "$REL"; zip -q -r SquareSumV1.zip SquareSumV1_zip; sha256sum SquareSumV1.zip SquareSumV1_zip/custom_opp_euleros_aarch64.run; unzip -l SquareSumV1.zip
 The environment has been set
 The environment has been set
  __  __               _          _                      _
@@ -27,9 +15,19 @@ Tips:
 2) Copy (Ctrl+C) and paste (Ctrl+V) on the jupyter terminal.
 3) Store your data in /home/ma-user/work, to which a persistent volume is mounted.
 4) Exercise caution when using plaintext passwords, hard-coded AK/SK, or directly entering them in the command line.
-PASS 72/72: shape=(128, 1, 64, 64), axes=(0, 2), dtype=torch.float32, keep_dims=True
-SUMMARY_SINGLETON_CORRECTNESS=72/72
-{"kind": "singleton_middle_crossover", "label": "s02bb", "shape": [200, 1, 1000, 64], "dtype": "float32", "reduce_elements": 200000, "outputs": 64, "elements": 12800000, "repeats": 5, "median_us": 53.412002, "samples_us": [47.648001, 53.412002, 52.344, 56.636, 53.715998, 52.424002, 53.552002]}
-SUMMARY_CROSSOVER=30/30
-{"kind": "singleton_gap_sweep", "label": "s02bb", "case": "multi_gap", "shape": [16, 1, 32, 1, 128], "axes": [0, 2, 4], "dtype": "float32", "elements": 65536, "outputs": 1, "repeats": 60, "median_us": 29.72, "effective_gbps": 8.820457, "samples_us": [29.075332, 26.112334, 27.601999, 45.479333, 31.337667, 30.673667, 29.72]}
-SUMMARY_SINGLETON_GAP=15/15
+b5484c12895cff3165d865a3e557fce321221bd5c09fb66de1c4916a6b35196b  SquareSumV1.zip
+a6f489baa532308882a355f59b864e9621b5386e12830d18f79d52ebccf284ef  SquareSumV1_zip/custom_opp_euleros_aarch64.run
+Archive:  SquareSumV1.zip
+  Length      Date    Time    Name
+---------  ---------- -----   ----
+        0  08-05-2026 18:51   SquareSumV1_zip/
+        0  08-05-2026 18:41   SquareSumV1_zip/op_host/
+     8515  08-05-2026 18:41   SquareSumV1_zip/op_host/CMakeLists.txt
+     1005  08-05-2026 18:41   SquareSumV1_zip/op_host/square_sum_v1_tiling.h
+    37710  08-05-2026 18:41   SquareSumV1_zip/op_host/square_sum_v1.cpp
+   598879  08-05-2026 18:42   SquareSumV1_zip/custom_opp_euleros_aarch64.run
+        0  08-05-2026 18:41   SquareSumV1_zip/op_kernel/
+      353  08-05-2026 18:41   SquareSumV1_zip/op_kernel/CMakeLists.txt
+   174595  08-05-2026 18:41   SquareSumV1_zip/op_kernel/square_sum_v1.cpp
+---------                     -------
+   821057                     9 files
