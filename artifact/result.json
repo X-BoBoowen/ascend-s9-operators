@@ -1,9 +1,9 @@
 {
-  "command": "set -eo pipefail; repo=/home/ma-user/work/s9/repository/ascend-s9-operators; backup=/home/ma-user/work/s9/experiments/squaresum_s02f_grouped_vector8_20260730_1603/pre_git_sync_scripts_20260730_1643; test ! -e \"$backup\"; mkdir -p \"$backup\"; cd \"$repo\"; for f in validation/SquareSumV1/squaresum_grouped_sweep_20260730.py validation/SquareSumV1/squaresum_grouped_vector8_probe_20260730.py; do test -f \"$f\"; mv \"$f\" \"$backup/\"; done; git pull --ff-only origin main; test \"$(git rev-parse HEAD)\" = 3695428bff3272ea160d19183dc7ac8144c8d5ae || test \"$(git rev-parse --short HEAD)\" = 3695428; sha256sum submission-src/SquareSumV1/op_host/square_sum_v1.cpp submission-src/SquareSumV1/op_kernel/square_sum_v1.cpp validation/SquareSumV1/squaresum_grouped_vector8_probe_20260730.py; git status --short --branch",
+  "command": "set -e; repo=/home/ma-user/work/s9/repository/ascend-s9-operators; opp=/home/ma-user/Ascend/cann-8.5.0/opp/vendors/customize; export ASCEND_CUSTOM_OPP_PATH=\"${ASCEND_CUSTOM_OPP_PATH-}\"; source \"$opp/bin/set_env.bash\"; export PYTHONPATH=\"$repo/validation/SquareSumV1:$PYTHONPATH\"; exp=/home/ma-user/work/s9/experiments/squaresum_s02ay_cloud_20260805_1603; python3 \"$repo/validation/SquareSumV1/benchmark_cases.py\" | tee \"$exp/benchmark_cases.log\"",
   "remote": "ma-user@dev-modelarts.cn-southwest-2.huaweicloud.com:32375",
-  "started_at": "2026-07-30T16:42:23.4140534+08:00",
-  "finished_at": "2026-07-30T16:42:28.3907736+08:00",
-  "duration_ms": 4976.72,
+  "started_at": "2026-08-05T16:10:18.3582430+08:00",
+  "finished_at": "2026-08-05T16:10:55.4242578+08:00",
+  "duration_ms": 37066.015,
   "exit_code": 0,
   "success": true,
   "log": "artifact/run.log"
