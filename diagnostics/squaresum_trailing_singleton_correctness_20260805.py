@@ -11,6 +11,10 @@ SEED = 2026080525
 DTYPES = (torch.float16, torch.bfloat16, torch.float32)
 CASES = (
     ("empty_control", (0, 1), (0,)),
+    ("empty_middle", (3, 0, 1), (1,)),
+    ("empty_output", (0, 3, 1), (1,)),
+    ("empty_gap", (2, 0, 1, 3, 1), (1, 3)),
+    ("empty_full_reduce", (0, 3), ()),
     ("unit_reduce", (1, 1), (0,)),
     ("odd_plain", (32769, 1), (0,)),
     ("two_outer", (2, 32769, 1), (1,)),
