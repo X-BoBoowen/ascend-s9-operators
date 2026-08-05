@@ -1,9 +1,9 @@
 {
-  "command": "set -e; ROOT=/home/ma-user/work/s9/repository/ascend-s9-operators; EXP=/home/ma-user/work/s9/experiments/squaresum_s02bf_cloud_20260805_1842; REL=/home/ma-user/work/s9/releases/squaresum_s02bf_20260805_1850; test ! -e \"$REL\"; mkdir -p \"$REL/SquareSumV1_zip\"; cp -a \"$ROOT/candidates/squaresum_s02bf_empty_tiling_key_20260805/SquareSumV1/op_host\" \"$ROOT/candidates/squaresum_s02bf_empty_tiling_key_20260805/SquareSumV1/op_kernel\" \"$REL/SquareSumV1_zip/\"; cp -p \"$EXP/build_out/custom_opp_euleros_aarch64.run\" \"$REL/SquareSumV1_zip/\"; cd \"$REL\"; zip -q -r SquareSumV1.zip SquareSumV1_zip; sha256sum SquareSumV1.zip SquareSumV1_zip/custom_opp_euleros_aarch64.run; unzip -l SquareSumV1.zip",
+  "command": "set -e; ROOT=/home/ma-user/work/s9/repository/ascend-s9-operators; EXP=/home/ma-user/work/s9/experiments/squaresum_s02bg_cloud_20260805_1900; REL=/home/ma-user/work/s9/releases/squaresum_s02bg_20260805_1906; test ! -e \"$REL\"; mkdir -p \"$REL/SquareSumV1_zip\"; cp -a \"$ROOT/candidates/squaresum_s02bg_fp32_middle8_compact_20260805/SquareSumV1/op_host\" \"$ROOT/candidates/squaresum_s02bg_fp32_middle8_compact_20260805/SquareSumV1/op_kernel\" \"$REL/SquareSumV1_zip/\"; cp -p \"$EXP/build_out/custom_opp_euleros_aarch64.run\" \"$REL/SquareSumV1_zip/\"; cd \"$REL\"; zip -q -r SquareSumV1.zip SquareSumV1_zip; sha256sum SquareSumV1.zip SquareSumV1_zip/custom_opp_euleros_aarch64.run; unzip -l SquareSumV1.zip",
   "remote": "ma-user@dev-modelarts.cn-southwest-2.huaweicloud.com:32375",
-  "started_at": "2026-08-05T18:50:51.3830970+08:00",
-  "finished_at": "2026-08-05T18:51:03.7998153+08:00",
-  "duration_ms": 12416.718,
+  "started_at": "2026-08-05T19:05:57.6937399+08:00",
+  "finished_at": "2026-08-05T19:06:03.5186606+08:00",
+  "duration_ms": 5824.921,
   "exit_code": 0,
   "success": true,
   "log": "artifact/run.log"
