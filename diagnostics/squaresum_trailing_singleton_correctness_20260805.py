@@ -34,6 +34,12 @@ CASES = (
 
 
 def tolerance(dtype, expected):
+    if expected.numel() == 0:
+        if dtype == torch.float16:
+            return 4e-3, 4e-3
+        if dtype == torch.bfloat16:
+            return 4e-2, 4e-2
+        return 2e-4, 2e-4
     scale = max(float(expected.abs().max()), 1.0)
     if dtype == torch.float16:
         return 4e-3, max(4e-3, scale * 4e-3)
