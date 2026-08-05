@@ -1,5 +1,5 @@
 
-[2026-08-05 16:10:30 +0800] $ set -e; repo=/home/ma-user/work/s9/repository/ascend-s9-operators; opp=/home/ma-user/Ascend/cann-8.5.0/opp/vendors/customize; export ASCEND_CUSTOM_OPP_PATH="${ASCEND_CUSTOM_OPP_PATH-}"; source "$opp/bin/set_env.bash"; export PYTHONPATH="$repo/validation/SquareSumV1:$PYTHONPATH"; exp=/home/ma-user/work/s9/experiments/squaresum_s02ay_cloud_20260805_1603; python3 "$repo/validation/SquareSumV1/benchmark_cases.py" | tee "$exp/benchmark_cases.log"
+[2026-08-05 16:13:16 +0800] $ set -e; repo=/home/ma-user/work/s9/repository/ascend-s9-operators; git -C "$repo" pull --ff-only origin main; test "$(git -C "$repo" rev-parse --short HEAD)" = "d0ad7f2"; git -C "$repo" status --short --branch | head -n 20
 The environment has been set
 The environment has been set
  __  __               _          _                      _
@@ -15,36 +15,23 @@ Tips:
 2) Copy (Ctrl+C) and paste (Ctrl+V) on the jupyter terminal.
 3) Store your data in /home/ma-user/work, to which a persistent volume is mounted.
 4) Exercise caution when using plaintext passwords, hard-coded AK/SK, or directly entering them in the command line.
-public: median_us=27.186, trials_us=[26.953, 27.29, 27.186, 27.057, 27.358]
-last_fp16: median_us=31.917, trials_us=[33.199, 32.152, 31.917, 31.391, 31.615]
-last_fp32: median_us=25.634, trials_us=[25.388, 25.634, 25.58, 25.936, 25.788]
-last_bf16: median_us=25.324, trials_us=[25.157, 25.449, 25.324, 25.256, 25.413]
-middle_fp16: median_us=32.637, trials_us=[32.579, 32.846, 32.43, 32.827, 32.637]
-middle_fp32: median_us=26.763, trials_us=[26.763, 30.661, 25.465, 26.212, 27.35]
-multi_fp16: median_us=26.821, trials_us=[26.956, 26.307, 26.678, 26.821, 26.918]
-multi_bf16: median_us=27.000, trials_us=[28.48, 27.371, 27.0, 26.529, 26.791]
-multi3_fp16: median_us=64.828, trials_us=[64.547, 64.828, 64.858, 64.944, 64.784]
-multi3_bf16: median_us=69.926, trials_us=[69.619, 69.892, 70.113, 70.015, 69.926]
-multi3_fp32: median_us=26.258, trials_us=[26.167, 26.258, 26.605, 32.602, 25.471]
-strided_tree_fp16: median_us=82.086, trials_us=[82.05, 82.36, 82.067, 82.086, 82.213]
-strided_tree_bf16: median_us=85.354, trials_us=[85.037, 85.354, 85.359, 85.358, 85.314]
-strided_tree_fp32: median_us=77.010, trials_us=[76.772, 77.01, 77.055, 77.147, 76.987]
-suffix_fp16: median_us=25.734, trials_us=[26.532, 25.734, 26.361, 25.238, 25.012]
-prefix_fp16: median_us=25.829, trials_us=[27.203, 25.121, 25.75, 25.829, 25.884]
-axis0_fp32: median_us=24.621, trials_us=[24.514, 24.621, 24.976, 24.706, 24.438]
-all_fp32: median_us=24.442, trials_us=[24.671, 24.442, 24.427, 24.357, 24.631]
-axis0_large_fp16: median_us=29.297, trials_us=[29.969, 28.959, 28.796, 29.439, 29.297]
-axis0_large_bf16: median_us=29.020, trials_us=[28.628, 29.02, 29.67, 29.141, 28.895]
-axis0_large_fp32: median_us=29.118, trials_us=[30.602, 29.118, 29.043, 28.682, 29.3]
-prefix_large_fp16: median_us=72.513, trials_us=[72.043, 72.467, 72.55, 72.513, 72.714]
-prefix_large_bf16: median_us=74.483, trials_us=[74.176, 74.514, 74.66, 74.483, 74.477]
-prefix_large_fp32: median_us=42.862, trials_us=[42.532, 42.844, 42.935, 43.056, 42.862]
-all_large_fp16: median_us=34.221, trials_us=[33.802, 34.125, 95.923, 35.178, 34.221]
-all_large_bf16: median_us=43.555, trials_us=[43.294, 43.555, 43.569, 43.532, 43.572]
-all_large_fp32: median_us=34.721, trials_us=[34.592, 34.721, 34.69, 36.061, 34.88]
-last_workspace_o8_fp16: median_us=28.866, trials_us=[28.974, 28.409, 27.597, 28.915, 28.866]
-last_workspace_o8_bf16: median_us=29.258, trials_us=[29.608, 29.156, 29.856, 29.258, 28.097]
-last_10000_fp16: median_us=31.664, trials_us=[31.742, 31.461, 31.753, 31.664, 31.465]
-last_10000_bf16: median_us=26.088, trials_us=[26.174, 26.088, 26.174, 25.916, 25.473]
-last_10000_fp32: median_us=26.305, trials_us=[26.305, 26.154, 26.483, 26.657, 26.091]
-small_fp16: median_us=25.021, trials_us=[25.391, 25.021, 24.979, 24.951, 25.105]
+From https://github.com/X-BoBoowen/ascend-s9-operators
+ * branch            main       -> FETCH_HEAD
+   e132ae7..d0ad7f2  main       -> origin/main
+Updating e132ae7..d0ad7f2
+Fast-forward
+ README.md                                |  31 ++++++-
+ SQUARESUM_S02AY_CLOUD_REPORT_20260805.md | 134 +++++++++++++++++++++++++++++++
+ artifact/result.json                     |   8 +-
+ artifact/run.log                         |  61 +++++++-------
+ 4 files changed, 202 insertions(+), 32 deletions(-)
+ create mode 100644 SQUARESUM_S02AY_CLOUD_REPORT_20260805.md
+## main...origin/main
+?? validation/SquareSumV1/common
+?? validation/SquareSumV1/extra-info/
+?? validation/SquareSumV1/squaresum_contiguous_sweep_20260730.py
+?? validation/SquareSumV1/squaresum_finalizer_sweep_20260730.py
+?? validation/SquareSumV1/squaresum_segmented_probe_20260730.py
+?? validation/SquareSumV1/squaresum_strided_sweep_20260730.py
+?? validation/Transpose/common/
+?? validation/common/

@@ -1,9 +1,9 @@
 {
-  "command": "set -e; repo=/home/ma-user/work/s9/repository/ascend-s9-operators; opp=/home/ma-user/Ascend/cann-8.5.0/opp/vendors/customize; export ASCEND_CUSTOM_OPP_PATH=\"${ASCEND_CUSTOM_OPP_PATH-}\"; source \"$opp/bin/set_env.bash\"; export PYTHONPATH=\"$repo/validation/SquareSumV1:$PYTHONPATH\"; exp=/home/ma-user/work/s9/experiments/squaresum_s02ay_cloud_20260805_1603; python3 \"$repo/validation/SquareSumV1/benchmark_cases.py\" | tee \"$exp/benchmark_cases.log\"",
+  "command": "set -e; repo=/home/ma-user/work/s9/repository/ascend-s9-operators; git -C \"$repo\" pull --ff-only origin main; test \"$(git -C \"$repo\" rev-parse --short HEAD)\" = \"d0ad7f2\"; git -C \"$repo\" status --short --branch | head -n 20",
   "remote": "ma-user@dev-modelarts.cn-southwest-2.huaweicloud.com:32375",
-  "started_at": "2026-08-05T16:10:18.3582430+08:00",
-  "finished_at": "2026-08-05T16:10:55.4242578+08:00",
-  "duration_ms": 37066.015,
+  "started_at": "2026-08-05T16:13:10.6659706+08:00",
+  "finished_at": "2026-08-05T16:13:19.7682282+08:00",
+  "duration_ms": 9102.258,
   "exit_code": 0,
   "success": true,
   "log": "artifact/run.log"
