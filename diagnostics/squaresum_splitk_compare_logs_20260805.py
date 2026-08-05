@@ -11,6 +11,8 @@ def load_results(path):
             continue
         fields = {}
         for token in line.split()[1:]:
+            if "=" not in token:
+                continue
             key, value = token.split("=", 1)
             fields[key] = value
         identity = (fields["case"], fields["dtype"])
