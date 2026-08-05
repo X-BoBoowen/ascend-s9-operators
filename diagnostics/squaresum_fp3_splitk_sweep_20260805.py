@@ -15,21 +15,23 @@ AXES = (0, 2, 4)
 # All layouts are fastPath3.  The first group varies the number of natural
 # grouped-suffix DMA rows while keeping the trailing row width fixed.  The
 # second group varies that width with at least 40 natural rows.  The final two
-# cases check that the same rule remains useful for a one-element output.
+# cases vary the real interleaved output width.  Keeping that width greater
+# than one is intentional: a unit extent removes the physical source gap and
+# makes the layout contiguous after stride coalescing.
 CASES = tuple(
     (
         f"rows_{rows}_tail4096_o8",
-        (1, 8, rows, 1, 4096),
+        (1, 1, rows, 8, 4096),
         rows,
         4096,
     )
     for rows in (8, 16, 24, 32, 40, 64, 80, 128)
 ) + (
-    ("rows_128_tail256_o8", (1, 8, 128, 1, 256), 128, 256),
-    ("rows_40_tail1024_o8", (1, 8, 40, 1, 1024), 40, 1024),
-    ("rows_40_tail16384_o8", (1, 8, 40, 1, 16384), 40, 16384),
-    ("rows_64_tail4096_o1", (1, 1, 64, 1, 4096), 64, 4096),
-    ("rows_128_tail4096_o1", (1, 1, 128, 1, 4096), 128, 4096),
+    ("rows_128_tail256_o8", (1, 1, 128, 8, 256), 128, 256),
+    ("rows_40_tail1024_o8", (1, 1, 40, 8, 1024), 40, 1024),
+    ("rows_40_tail16384_o8", (1, 1, 40, 8, 16384), 40, 16384),
+    ("rows_128_tail4096_o2", (1, 1, 128, 2, 4096), 128, 4096),
+    ("rows_128_tail4096_o4", (1, 1, 128, 4, 4096), 128, 4096),
 )
 
 DTYPES = (
