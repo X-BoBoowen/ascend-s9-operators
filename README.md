@@ -17,11 +17,11 @@
 
 > 状态时间：2026-08-05（Asia/Shanghai）
 >
-> 当前阶段：SquareSumV1-S02BF、S02BG 官方结果分别为 `4001.200` 和
-> `3995.5995 μs`，均未优于 S02BA 的 `3985.330 μs`，因此两者不晋级。
-> 下一轮已转向小输出、大规模非连续归约的 split-K/workspace 算法；
-> 目标仍为 `≤1195.599 μs`。完整证据见
-> [`SQUARESUM_S02BG_CLOUD_REPORT_20260805.md`](./SQUARESUM_S02BG_CLOUD_REPORT_20260805.md)。
+> 当前阶段：SquareSumV1-S02BI 已完成 910B4/CANN 8.5.0 构建、
+> `1370/1370` 门禁和相邻安装 A/B；目标 fastPath3 矩阵合计约 `6.481x`，
+> 单项最高 `19.984x`。S02BF/S02BG 官方均未晋级，正式基线仍为 S02BA
+> 的 `3985.330 μs`，目标为 `≤1195.599 μs`。完整证据见
+> [`SQUARESUM_S02BI_CLOUD_REPORT_20260805.md`](./SQUARESUM_S02BI_CLOUD_REPORT_20260805.md)。
 
 下一轮完整执行方案见
 [`OPTIMIZATION_PLAN_20260730.md`](./OPTIMIZATION_PLAN_20260730.md)。
@@ -36,7 +36,7 @@
 | Greater | 本轮完成 | 26 定向 + 220 随机 + 9 个 int32 扩展；扩展集连续复跑 3 次 | 已生成并审计 | 5/5 Pass，18595.372 |
 | IndexAdd | 本轮完成 | 23 定向 + 170 随机 + 345 扩展 = 538 | 已生成并审计 | 5/5 Pass，119427.8755 |
 | Transpose | 本轮完成 | 48 定向 + 200 随机 + 152 扩展 + 84 边界 = 484 | 已生成并审计 | 5/5 Pass，16303.227 |
-| SquareSumV1 | S02BF/S02BG 均未晋级；split-K 审计中 | S02BG 1295/1295 + 27/27 A/B | S02BF、S02BG 分别打包审计 | S02BF 4001.200；S02BG 3995.5995；基线仍为 S02BA 3985.330 |
+| SquareSumV1 | S02BI 已验证待官方结果 | S02BI 1295/1295 + 75/75 split-K 专项 | S02BI 已独立打包审计 | S02BF 4001.200；S02BG 3995.5995；基线仍为 S02BA 3985.330 |
 
 这里的“本轮完成”表示：
 
@@ -992,6 +992,27 @@ S02BG 官方结果为 `6.500 / 399.998 / 138.4125 / 2553.771 /
 `10.2695 μs`（`+0.258%`），相对 S02BF 只改善 `5.6005 μs`；因此
 S02BG 也不晋级，S02BA 继续作为正式官方基线。
 
+### 12.13 SquareSumV1-S02BI fastPath3 split-K 候选
+
+S02BI 只在 fastPath3、输出不超过 8、尾部连续归约宽度
+`1024～16384`、自然分组行不少于 16 且总规模达到 workspace 门槛时，
+把归约行分给 40 个 AIV 并复用既有 key 4 的 FP32 树归约。fastPath4、
+尾宽 256、自然行 8、输出 9 和阈值下方均不进入新路由。
+
+同机相邻 A/B 的 33 个目标记录合计从 `8899.536` 降到
+`1373.074 μs`，约 `6.481x`；单项最小/中位/最大加速为
+`1.202x / 4.269x / 19.984x`。既有全量和新专项合计 `1370/1370`
+正确。待测 ZIP：
+
+```text
+D:\29722\Desktop\GCC\提交相关材料\20260805\S02BI\SquareSumV1.zip
+ZIP SHA-256：BB3ECCDFBA6584EBAC4D7D3F5B86C34E5579C935BF775E8C5CA0BC9046B2A565
+RUN SHA-256：BBBCD140B73DB45BD89C2E7B6D142FFC5345A917E47FCD8A25BBD8BD2145654E
+```
+
+完整门槛、失败入口证据、A/B 和包审计见
+[`SQUARESUM_S02BI_CLOUD_REPORT_20260805.md`](./SQUARESUM_S02BI_CLOUD_REPORT_20260805.md)。
+
 ## 13. 安全与仓库卫生
 
 禁止提交：
@@ -1010,12 +1031,11 @@ git ls-files | grep -Ei '\.(pem|key|run|so|whl|zip)$'
 
 ## 14. 结论边界
 
-当前能够确认的是：S02BF、S02BG 官方均为 `5/5 Pass`，但
-`prof_sum=4001.200 / 3995.5995 μs`，都未优于 S02BA 的
-`3985.330 μs`。公开矩阵上的尾部单例和宽度 8 收益没有转化为官方主
-耗时改善，这两条候选均不晋级。
+当前能够确认的是：S02BF、S02BG 官方均为 `5/5 Pass`，但都未优于
+S02BA 的 `3985.330 μs`；S02BI 已在通用 fastPath3 目标矩阵取得稳定
+`1.202x～19.984x` 加速，并通过 `1370/1370` 正确性门禁和独立包审计。
 
 当前不能确认的是：隐藏 Case 的具体 shape/dtype/TilingKey，以及下一条
-split-K/workspace 路线的官方收益。后续优化必须继续依据通用布局、公开
+S02BI split-K/workspace 路线的官方收益。后续优化必须继续依据通用布局、公开
 矩阵和真机 profiling，不得把平台 Case 当作可猜测或可硬编码的数据；
 只有官方五项结果可以证明是否达到 `0.30 × T_baseline`。

@@ -1,5 +1,5 @@
 
-[2026-08-05 19:06:03 +0800] $ set -e; ROOT=/home/ma-user/work/s9/repository/ascend-s9-operators; EXP=/home/ma-user/work/s9/experiments/squaresum_s02bg_cloud_20260805_1900; REL=/home/ma-user/work/s9/releases/squaresum_s02bg_20260805_1906; test ! -e "$REL"; mkdir -p "$REL/SquareSumV1_zip"; cp -a "$ROOT/candidates/squaresum_s02bg_fp32_middle8_compact_20260805/SquareSumV1/op_host" "$ROOT/candidates/squaresum_s02bg_fp32_middle8_compact_20260805/SquareSumV1/op_kernel" "$REL/SquareSumV1_zip/"; cp -p "$EXP/build_out/custom_opp_euleros_aarch64.run" "$REL/SquareSumV1_zip/"; cd "$REL"; zip -q -r SquareSumV1.zip SquareSumV1_zip; sha256sum SquareSumV1.zip SquareSumV1_zip/custom_opp_euleros_aarch64.run; unzip -l SquareSumV1.zip
+[2026-08-05 20:44:55 +0800] $ set -e; repo=/home/ma-user/work/s9/repository/ascend-s9-operators; exp=/home/ma-user/work/s9/experiments/squaresum_s02bi_cloud_20260805_2028; release=/home/ma-user/work/s9/releases/squaresum_s02bi_20260805_2045; test ! -e "$release"; mkdir -p "$release/SquareSumV1_zip"; cp -a "$repo/candidates/squaresum_s02bi_fp3_splitk_20260805/SquareSumV1/op_host" "$repo/candidates/squaresum_s02bi_fp3_splitk_20260805/SquareSumV1/op_kernel" "$release/SquareSumV1_zip/"; cp "$exp/build_out/custom_opp_euleros_aarch64.run" "$release/SquareSumV1_zip/"; find "$release/SquareSumV1_zip" -type f -print0 | sort -z | xargs -0 sha256sum | tee "$release/SHA256SUMS"; echo RELEASE_READY="$release"
 The environment has been set
 The environment has been set
  __  __               _          _                      _
@@ -15,19 +15,10 @@ Tips:
 2) Copy (Ctrl+C) and paste (Ctrl+V) on the jupyter terminal.
 3) Store your data in /home/ma-user/work, to which a persistent volume is mounted.
 4) Exercise caution when using plaintext passwords, hard-coded AK/SK, or directly entering them in the command line.
-d3bc2703620c076ec35a173c558926e9d76868e3f05d1be12bca090bfa6d0247  SquareSumV1.zip
-58b03731e7e7d1ef83db913ce9e31d71bb91bc14571f4ebbd2f64661c0dafe40  SquareSumV1_zip/custom_opp_euleros_aarch64.run
-Archive:  SquareSumV1.zip
-  Length      Date    Time    Name
----------  ---------- -----   ----
-        0  08-05-2026 19:06   SquareSumV1_zip/
-        0  08-05-2026 18:58   SquareSumV1_zip/op_host/
-     8515  08-05-2026 18:58   SquareSumV1_zip/op_host/CMakeLists.txt
-     1005  08-05-2026 18:58   SquareSumV1_zip/op_host/square_sum_v1_tiling.h
-    37710  08-05-2026 18:58   SquareSumV1_zip/op_host/square_sum_v1.cpp
-   598247  08-05-2026 18:58   SquareSumV1_zip/custom_opp_euleros_aarch64.run
-        0  08-05-2026 18:58   SquareSumV1_zip/op_kernel/
-      353  08-05-2026 18:58   SquareSumV1_zip/op_kernel/CMakeLists.txt
-   174545  08-05-2026 18:58   SquareSumV1_zip/op_kernel/square_sum_v1.cpp
----------                     -------
-   820375                     9 files
+bbbcd140b73db45bd89c2e7b6d142ffc5345a917e47fcd8a25bbd8bd2145654e  /home/ma-user/work/s9/releases/squaresum_s02bi_20260805_2045/SquareSumV1_zip/custom_opp_euleros_aarch64.run
+0dd1acfd256e9666299b0b634c4f16362aa61702395fb68a504a12ddec123f23  /home/ma-user/work/s9/releases/squaresum_s02bi_20260805_2045/SquareSumV1_zip/op_host/CMakeLists.txt
+dff116abe949c7e603b55a37c16df0f53534c483f2e7b474823590d167377379  /home/ma-user/work/s9/releases/squaresum_s02bi_20260805_2045/SquareSumV1_zip/op_host/square_sum_v1.cpp
+e669820ab05878a8701fe2e6f33f4b44076ee93e74c1a308c3b5e8fcf54079f6  /home/ma-user/work/s9/releases/squaresum_s02bi_20260805_2045/SquareSumV1_zip/op_host/square_sum_v1_tiling.h
+bbaa2dd5ea0fea1b4a1b121a72f2713043344e95da727eb51384ae2de92e5525  /home/ma-user/work/s9/releases/squaresum_s02bi_20260805_2045/SquareSumV1_zip/op_kernel/CMakeLists.txt
+984474be1c15e2634316b0952bcc0060ae4a7d11bbbd059662e9cbf4cbd9f554  /home/ma-user/work/s9/releases/squaresum_s02bi_20260805_2045/SquareSumV1_zip/op_kernel/square_sum_v1.cpp
+RELEASE_READY=/home/ma-user/work/s9/releases/squaresum_s02bi_20260805_2045
