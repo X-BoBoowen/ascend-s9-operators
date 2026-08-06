@@ -493,7 +493,7 @@ static ge::graphStatus TilingFunc(gert::TilingContext* context)
                 uint64_t splitKTasks = 0U;
                 const uint64_t outerReduceGroups =
                     reduceElements / lastReduceDim;
-                if (innerElements >= 2U &&
+                if (innerElements >= 4U &&
                     groupedOutputDim >=
                         STRIDED_GROUPED_MAX_WIDTH &&
                     outerReduceGroups >= MAX_BLOCK_DIM &&

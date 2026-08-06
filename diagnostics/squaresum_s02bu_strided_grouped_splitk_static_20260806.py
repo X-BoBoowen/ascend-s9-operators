@@ -38,7 +38,7 @@ def selects_splitk(
         (inner + block_elements - 1) // block_elements * block_elements
     )
     return (
-        2 <= inner <= 16
+        4 <= inner <= 16
         and group_dim >= 8
         and 2 <= last_reduce <= 64
         and last_reduce & (last_reduce - 1) == 0
@@ -86,11 +86,11 @@ def main():
         "? AscendC::GetBlockNum()" in kernel_compact
     )
 
-    assert selects_splitk(128, 2, 64, 64, 1 << 20, 256, 2)
     assert selects_splitk(64, 4, 64, 40, 1 << 20, 256, 4)
     assert selects_splitk(32, 8, 64, 41, 1 << 20, 256, 2)
     assert selects_splitk(16, 16, 64, 80, 1 << 20, 256, 4)
     assert not selects_splitk(128, 1, 64, 64, 1 << 20, 128, 2)
+    assert not selects_splitk(128, 2, 64, 64, 1 << 20, 256, 2)
     assert not selects_splitk(128, 2, 64, 39, 1 << 20, 256, 2)
     assert not selects_splitk(128, 2, 64, 64, 1 << 17, 256, 2)
     assert not selects_splitk(512, 2, 64, 64, 1 << 20, 1024, 2)
