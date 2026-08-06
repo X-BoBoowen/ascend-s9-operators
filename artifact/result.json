@@ -1,9 +1,9 @@
 {
-  "command": "set -e\nsource /home/ma-user/Ascend/cann-8.5.0/bin/setenv.bash\nrepo=/home/ma-user/work/s9/repository/ascend-s9-operators\nexp=/home/ma-user/work/s9/experiments/squaresum_s02ca_final_cloud_20260806_1507\ngit -C \"$repo\" pull --ff-only origin main\nexport PYTHONPATH=\"$repo/validation/SquareSumV1:${PYTHONPATH:-}\"\npython3 \"$repo/diagnostics/squaresum_s02ca_splitk_correctness_20260806.py\" S02CA 2>&1 | tee \"$exp/splitk_boundary_s02ca.log\"\ntest ${PIPESTATUS[0]} -eq 0\ntail -n 1 \"$exp/splitk_boundary_s02ca.log\"",
+  "command": "set -e\nrepo=/home/ma-user/work/s9/repository/ascend-s9-operators\nexp=/home/ma-user/work/s9/experiments/squaresum_s02cd_power2_compact_20260806_1543\nrel=/home/ma-user/work/s9/releases/squaresum_s02cd_20260806_1550\ncd \"$repo\"\ngit pull --ff-only origin main\nprintf 'REMOTE_HEAD='; git rev-parse --short HEAD\ngrep -E 'SUMMARY' \"$exp/regression147_s02cd.log\"\ntail -1 \"$exp/path_atlas_s02cd.log\"\nsha256sum \"$rel/SquareSumV1.zip\" \"$rel/SquareSumV1_zip/custom_opp_euleros_aarch64.run\"\nnohup bash -lc 'sleep 25; cd /home/ma-user/work/s9/repository/ascend-s9-operators; git pull --ff-only origin main > /home/ma-user/work/s9/s02cd_final_sync.log 2>&1; git rev-parse --short HEAD >> /home/ma-user/work/s9/s02cd_final_sync.log' >/dev/null 2>&1 &\necho FINAL_SYNC_SCHEDULED_PID=$!",
   "remote": "ma-user@dev-modelarts.cn-southwest-2.huaweicloud.com:32375",
-  "started_at": "2026-08-06T15:10:58.2901422+08:00",
-  "finished_at": "2026-08-06T15:11:32.6545290+08:00",
-  "duration_ms": 34364.387,
+  "started_at": "2026-08-06T15:53:43.2796355+08:00",
+  "finished_at": "2026-08-06T15:53:48.7808671+08:00",
+  "duration_ms": 5501.232,
   "exit_code": 0,
   "success": true,
   "log": "artifact/run.log"
