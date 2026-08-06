@@ -117,8 +117,10 @@ bash diagnostics/run_squaresum_s02cr_cloud_gate_20260806.sh \
 2. 两个不同 `--install-path` 隔离安装；
 3. S02CR 六个边界布局 × 三 dtype，共 `18/18` 真机正确性；
 4. S02CA/S02CR 两个目标布局 × 三 dtype 的 Event 发现图谱；
-5. 所有目标布局和 dtype 的官方兼容 msprof A→B→A；
-6. 基线漂移 `<=3%`、任一回退 `<=3%`、总改善 `>=10%` 才通过。
+5. Event 总改善不足 10% 或任一点回退超过 5% 时快速淘汰，避免浪费
+   `msprof` 额度；
+6. 通过快速筛选后执行所有目标布局和 dtype 的官方兼容 msprof A→B→A；
+7. 基线漂移 `<=3%`、任一回退 `<=3%`、总改善 `>=10%` 才通过。
 
 每次运行清理旧 `artifact/`；主结果与日志位于：
 

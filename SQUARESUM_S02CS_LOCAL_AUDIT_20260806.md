@@ -89,7 +89,9 @@ official project template and a new work directory. The gate builds S02CA and
 S02CS from source into separate projects, installs them into isolated roots,
 runs 30 candidate correctness checks, discovers all three dtypes on the
 `short_tail_splitk` tier, and performs official-compatible S02CA/S02CS/S02CA
-A/B/A profiling. It rejects less than 10% aggregate improvement, more than 3%
-per-case regression, or more than 3% baseline drift.
+A/B/A profiling. Before expensive profiling, Event A/B rejects aggregate
+improvement below 10% or any point regression above 5%. The official gate then
+rejects less than 10% aggregate improvement, more than 3% per-case regression,
+or more than 3% baseline drift.
 
 Do not package or submit S02CS before this gate passes on CANN community 8.5.0.

@@ -57,7 +57,9 @@ Run `diagnostics/run_squaresum_s02ct_cloud_gate_20260806.sh` with a clean
 official project template and a new work directory. It independently builds
 and installs S02CA/S02CT, runs 27 candidate correctness cases, records all three
 dtypes on the `last_output_splitk` tier, and performs official-compatible
-S02CA/S02CT/S02CA A/B/A profiling. It rejects aggregate improvement below 10%,
-any per-case regression above 3%, or baseline drift above 3%.
+S02CA/S02CT/S02CA A/B/A profiling. Before expensive profiling, Event A/B
+rejects aggregate improvement below 10% or any point regression above 5%.
+The official gate then rejects aggregate improvement below 10%, any per-case
+regression above 3%, or baseline drift above 3%.
 
 Do not package or submit S02CT before the CANN community 8.5.0 gate passes.

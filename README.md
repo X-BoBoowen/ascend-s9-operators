@@ -1424,4 +1424,5 @@ git ls-files | grep -Ei '\.(pem|key|run|so|whl|zip)$'
 `diagnostics/run_squaresum_s02ct_cloud_gate_20260806.sh` 与
 `diagnostics/run_squaresum_s02cs_cloud_gate_20260806.sh`，最后独立执行
 S02CQ。所有门禁都要求同机隔离 A→B→A、单点回退不超过 3%、基线漂移
-不超过 3%；三个结构候选的目标矩阵总改善门槛为 10%，S02CQ 为 5%。
+不超过 3%；三个结构候选先以 Event 做 10% 快速淘汰，再进入昂贵的官方
+兼容 msprof；目标矩阵总改善门槛为 10%，S02CQ 为 5%。

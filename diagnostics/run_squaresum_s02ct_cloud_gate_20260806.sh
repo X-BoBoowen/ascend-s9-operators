@@ -158,6 +158,16 @@ run_with_opp "${candidate_env}" python3 \
     --label S02CT --tier last_output_splitk --dtypes fp16 bf16 fp32 \
     | tee "${detail_root}/candidate_last_output_splitk_atlas.log"
 
+# Event timing is only a cheap fail-fast screen. A passing candidate must still
+# complete the official-compatible msprof A/B/A gate below.
+gate_stage="event_comparison"
+python3 diagnostics/compare_squaresum_event_atlas_20260806.py \
+    --baseline "${detail_root}/baseline_last_output_splitk_atlas.log" \
+    --candidate "${detail_root}/candidate_last_output_splitk_atlas.log" \
+    --minimum-improvement-percent 10 \
+    --maximum-regression-percent 5 \
+    --output "${detail_root}/event_comparison.json"
+
 # Official-compatible timing: 30 interleaved aclnnMul + SquareSumV1 calls,
 # filter Mul rows, then take the median of task durations 10..30.  All three
 # competition dtypes are collected into each A/B/A matrix.
