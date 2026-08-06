@@ -447,7 +447,7 @@ static ge::graphStatus TilingFunc(gert::TilingContext* context)
             reduceDims[reduceRank - 1U];
         const bool powerOfTwoReduce =
             lastReduceDim > 1U &&
-            lastReduceDim <= 64U &&
+            lastReduceDim <= 4096U &&
             (lastReduceDim & (lastReduceDim - 1U)) == 0U;
         if (powerOfTwoReduce &&
             SafeMultiply(
@@ -493,7 +493,47 @@ static ge::graphStatus TilingFunc(gert::TilingContext* context)
                 uint64_t splitKTasks = 0U;
                 const uint64_t outerReduceGroups =
                     reduceElements / lastReduceDim;
+                if (innerElements == 2U &&
+                    lastReduceDim >= 128U &&
+                    outerReduceGroups >= MAX_BLOCK_DIM &&
+                    inputElements >= STRIDED_SPLITK_MIN_INPUT &&
+                    outputElements <=
+                        STRIDED_SPLITK_MAX_OUTPUTS) {
+                    for (uint64_t width =
+                             STRIDED_GROUPED_MAX_WIDTH;
+                         width >= 1U;
+                         width /= 2U) {
+                        uint64_t compactBufferElements = 0U;
+                        uint64_t compactTasksPerOuter = 0U;
+                        uint64_t compactTasks = 0U;
+                        if (groupedOutputDim < width ||
+                            !SafeMultiply(
+                                width,
+                                stridedGroupedRowElements,
+                                compactBufferElements) ||
+                            compactBufferElements >
+                                NORMAL_CHUNK_ELEMENTS) {
+                            continue;
+                        }
+                        compactTasksPerOuter =
+                            (groupedOutputDim + width - 1U) /
+                            width;
+                        if (!SafeMultiply(
+                                stridedGroupedOuterRows,
+                                compactTasksPerOuter,
+                                compactTasks)) {
+                            continue;
+                        }
+                        stridedGroupedWidth =
+                            static_cast<uint32_t>(width);
+                        stridedGroupedTasks = compactTasks;
+                        stridedGroupedRows = true;
+                        stridedGroupedSplitK = true;
+                        break;
+                    }
+                }
                 if (innerElements >= 4U &&
+                    !stridedGroupedSplitK &&
                     groupedOutputDim >=
                         STRIDED_GROUPED_MAX_WIDTH &&
                     outerReduceGroups >= MAX_BLOCK_DIM &&
