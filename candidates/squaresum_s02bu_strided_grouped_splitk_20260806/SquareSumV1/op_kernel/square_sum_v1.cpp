@@ -153,7 +153,7 @@ public:
                 (outputElements_ + 7U) / 8U * 8U;
             const uint64_t partialBlocks =
                 reduceMode_ == 2U || reduceMode_ == 3U ||
-                        reduceMode_ == 4U
+                        reduceMode_ == 4U || reduceMode_ == 5U
                     ? AscendC::GetBlockNum()
                     : 1U;
             workspaceGm_.SetGlobalBuffer(

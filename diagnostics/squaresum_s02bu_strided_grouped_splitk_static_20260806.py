@@ -77,6 +77,11 @@ def main():
     assert "reduceMode_ == 5U" in kernel
     assert "FinalizeParallelReductionTree();" in kernel
     assert "partialWorkspaceOffset + outputStart" in kernel
+    kernel_compact = " ".join(kernel.split())
+    assert (
+        "reduceMode_ == 4U || reduceMode_ == 5U "
+        "? AscendC::GetBlockNum()" in kernel_compact
+    )
 
     assert selects_splitk(128, 2, 64, 64, 1 << 20, 256, 2)
     assert selects_splitk(64, 4, 64, 40, 1 << 20, 256, 4)
