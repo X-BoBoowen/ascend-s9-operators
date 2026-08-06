@@ -1,0 +1,99 @@
+{
+  "schema_version": 1,
+  "dimension_limits_from_spec": {
+    "N": 10000,
+    "N2": 10000,
+    "N3": 1000,
+    "N4": 200
+  },
+  "cases": [
+    {
+      "name": "public_case1",
+      "route": "fast1",
+      "shape": [123, 31],
+      "axes": [-1],
+      "keep_dims": true,
+      "tier": "smoke"
+    },
+    {
+      "name": "fast1_last_unaligned",
+      "route": "fast1",
+      "shape": [128, 8191],
+      "axes": [-1],
+      "keep_dims": false,
+      "tier": "core"
+    },
+    {
+      "name": "fast1_contiguous_suffix",
+      "route": "fast1",
+      "shape": [64, 128, 257],
+      "axes": [1, 2],
+      "keep_dims": false,
+      "tier": "core"
+    },
+    {
+      "name": "fast2_middle_unaligned",
+      "route": "fast2",
+      "shape": [64, 4096, 31],
+      "axes": [1],
+      "keep_dims": false,
+      "tier": "core"
+    },
+    {
+      "name": "fast2_middle_aligned",
+      "route": "fast2",
+      "shape": [64, 4096, 64],
+      "axes": [1],
+      "keep_dims": false,
+      "tier": "core"
+    },
+    {
+      "name": "fast2_singleton_gap",
+      "route": "fast2",
+      "shape": [64, 1000, 1, 31],
+      "axes": [1, 2],
+      "keep_dims": false,
+      "tier": "extended"
+    },
+    {
+      "name": "fast3_noncontiguous_last",
+      "route": "fast3",
+      "shape": [64, 64, 1024],
+      "axes": [0, 2],
+      "keep_dims": false,
+      "tier": "core"
+    },
+    {
+      "name": "fast4_noncontiguous_middle",
+      "route": "fast4",
+      "shape": [64, 64, 128, 32],
+      "axes": [0, 2],
+      "keep_dims": false,
+      "tier": "core"
+    },
+    {
+      "name": "fast4_inner_one",
+      "route": "fast4",
+      "shape": [64, 64, 128, 1],
+      "axes": [0, 2],
+      "keep_dims": false,
+      "tier": "extended"
+    },
+    {
+      "name": "full_reduce_rank3",
+      "route": "fast1",
+      "shape": [64, 128, 256],
+      "axes": [0, 1, 2],
+      "keep_dims": false,
+      "tier": "core"
+    },
+    {
+      "name": "fast2_small_unaligned",
+      "route": "fast2",
+      "shape": [73, 513, 31],
+      "axes": [1],
+      "keep_dims": true,
+      "tier": "extended"
+    }
+  ]
+}
