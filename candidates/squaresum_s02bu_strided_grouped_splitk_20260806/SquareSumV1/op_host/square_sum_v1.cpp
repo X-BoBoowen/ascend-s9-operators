@@ -1202,11 +1202,7 @@ static ge::graphStatus TilingFunc(gert::TilingContext* context)
         outputElements / innerElements <= MAX_BLOCK_DIM) {
         const uint64_t outputRows =
             outputElements / innerElements;
-        desiredBlocks =
-            inputTypeBytes < sizeof(float) ||
-                    innerElements % elementsPerBlock == 0U
-                ? outputRows
-                : MAX_BLOCK_DIM;
+        desiredBlocks = outputRows;
     } else if (
         fastPath == 1 ||
         fastPath == 3 ||
