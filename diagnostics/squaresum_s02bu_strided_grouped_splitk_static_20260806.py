@@ -73,6 +73,7 @@ def main():
     assert "reduceMode = 5U" in host
     assert "STRIDED_SPLITK_MIN_INPUT" in host
     assert "STRIDED_SPLITK_MAX_OUTPUTS" in host
+    assert "desiredBlocks = (splitKGroups + 1U) / 2U;" in host
     assert "ProcessStridedGroupedSplitK();" in kernel
     assert "reduceMode_ == 5U" in kernel
     mode5 = kernel[kernel.index("if (reduceMode_ == 5U)") :]
