@@ -1,5 +1,5 @@
 
-[2026-08-06 19:09:18 +0800] $ set -euo pipefail; release=/home/ma-user/work/s9/releases/squaresum_s02cn_20260806_1910; "$release/extracted/SquareSumV1_zip/custom_opp_euleros_aarch64.run" --quiet > "$release/install_release.log" 2>&1; cd /home/ma-user/work/s9/repository/ascend-s9-operators; export PYTHONPATH=$PWD/validation/SquareSumV1:$PYTHONPATH; export LD_LIBRARY_PATH=/home/ma-user/Ascend/cann-8.5.0/opp/vendors/customize/op_api/lib:$LD_LIBRARY_PATH; python /home/ma-user/work/s9/experiments/squaresum_s02cn_middle_full_rows_20260806_1845/squaresum_s02cn_middle_full_rows_correctness_20260806.py s02cn_release > "$release/correctness_release.log" 2>&1; tail -n 1 "$release/correctness_release.log"; sha256sum "$release/SquareSumV1.zip" "$release/extracted/SquareSumV1_zip/custom_opp_euleros_aarch64.run"
+[2026-08-06 19:12:52 +0800] $ cd /home/ma-user/work/s9/repository/ascend-s9-operators && echo BRANCH=$(git branch --show-current) BEFORE=$(git rev-parse HEAD) && git status --short && git pull --ff-only origin main && echo AFTER=$(git rev-parse HEAD) && git status --short
 The environment has been set
 The environment has been set
  __  __               _          _                      _
@@ -15,6 +15,48 @@ Tips:
 2) Copy (Ctrl+C) and paste (Ctrl+V) on the jupyter terminal.
 3) Store your data in /home/ma-user/work, to which a persistent volume is mounted.
 4) Exercise caution when using plaintext passwords, hard-coded AK/SK, or directly entering them in the command line.
-S02CN_CORRECTNESS_SUMMARY label=s02cn_release passed=96/96
-1d04777575176a168860cda1be96b2f75779c7faaef401e78dfa4f8845d28e16  /home/ma-user/work/s9/releases/squaresum_s02cn_20260806_1910/SquareSumV1.zip
-4e72ea2372b9c94719610d1343c8e1d4b6f1b220ac7a68b5c61497ea85a778b3  /home/ma-user/work/s9/releases/squaresum_s02cn_20260806_1910/extracted/SquareSumV1_zip/custom_opp_euleros_aarch64.run
+BRANCH=main BEFORE=0b2b6bd9c24c7244a90997e58b4e2ba4443633ee
+?? extra-info/
+?? validation/SquareSumV1/common
+?? validation/SquareSumV1/extra-info/
+?? validation/SquareSumV1/squaresum_contiguous_sweep_20260730.py
+?? validation/SquareSumV1/squaresum_finalizer_sweep_20260730.py
+?? validation/SquareSumV1/squaresum_segmented_probe_20260730.py
+?? validation/SquareSumV1/squaresum_strided_sweep_20260730.py
+?? validation/Transpose/common/
+?? validation/common/
+From https://github.com/X-BoBoowen/ascend-s9-operators
+ * branch            main       -> FETCH_HEAD
+   0b2b6bd..2892b21  main       -> origin/main
+Updating 0b2b6bd..2892b21
+Fast-forward
+ README.md                                          |   55 +-
+ SQUARESUM_S02CN_CLOUD_REPORT_20260806.md           |  147 +
+ artifact/result.json                               |    8 +-
+ artifact/run.log                                   |   30 +-
+ .../SquareSumV1/op_host/CMakeLists.txt             |  221 +
+ .../SquareSumV1/op_host/square_sum_v1.cpp          | 1478 +++++
+ .../SquareSumV1/op_host/square_sum_v1_tiling.h     |   23 +
+ .../SquareSumV1/op_kernel/CMakeLists.txt           |   11 +
+ .../SquareSumV1/op_kernel/square_sum_v1.cpp        | 6913 ++++++++++++++++++++
+ .../squaresum_s02cn_fast2_surface_20260806.py      |  109 +
+ ..._s02cn_middle_full_rows_correctness_20260806.py |  121 +
+ 11 files changed, 9074 insertions(+), 42 deletions(-)
+ create mode 100644 SQUARESUM_S02CN_CLOUD_REPORT_20260806.md
+ create mode 100644 candidates/squaresum_s02cn_middle_full_rows_20260806/SquareSumV1/op_host/CMakeLists.txt
+ create mode 100644 candidates/squaresum_s02cn_middle_full_rows_20260806/SquareSumV1/op_host/square_sum_v1.cpp
+ create mode 100644 candidates/squaresum_s02cn_middle_full_rows_20260806/SquareSumV1/op_host/square_sum_v1_tiling.h
+ create mode 100644 candidates/squaresum_s02cn_middle_full_rows_20260806/SquareSumV1/op_kernel/CMakeLists.txt
+ create mode 100644 candidates/squaresum_s02cn_middle_full_rows_20260806/SquareSumV1/op_kernel/square_sum_v1.cpp
+ create mode 100644 diagnostics/squaresum_s02cn_fast2_surface_20260806.py
+ create mode 100644 diagnostics/squaresum_s02cn_middle_full_rows_correctness_20260806.py
+AFTER=2892b211395dfc7d898489572728a50695eb40a6
+?? extra-info/
+?? validation/SquareSumV1/common
+?? validation/SquareSumV1/extra-info/
+?? validation/SquareSumV1/squaresum_contiguous_sweep_20260730.py
+?? validation/SquareSumV1/squaresum_finalizer_sweep_20260730.py
+?? validation/SquareSumV1/squaresum_segmented_probe_20260730.py
+?? validation/SquareSumV1/squaresum_strided_sweep_20260730.py
+?? validation/Transpose/common/
+?? validation/common/

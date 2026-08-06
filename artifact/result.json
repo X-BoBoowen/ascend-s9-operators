@@ -1,9 +1,9 @@
 {
-  "command": "set -euo pipefail; release=/home/ma-user/work/s9/releases/squaresum_s02cn_20260806_1910; \"$release/extracted/SquareSumV1_zip/custom_opp_euleros_aarch64.run\" --quiet > \"$release/install_release.log\" 2>&1; cd /home/ma-user/work/s9/repository/ascend-s9-operators; export PYTHONPATH=$PWD/validation/SquareSumV1:$PYTHONPATH; export LD_LIBRARY_PATH=/home/ma-user/Ascend/cann-8.5.0/opp/vendors/customize/op_api/lib:$LD_LIBRARY_PATH; python /home/ma-user/work/s9/experiments/squaresum_s02cn_middle_full_rows_20260806_1845/squaresum_s02cn_middle_full_rows_correctness_20260806.py s02cn_release > \"$release/correctness_release.log\" 2>&1; tail -n 1 \"$release/correctness_release.log\"; sha256sum \"$release/SquareSumV1.zip\" \"$release/extracted/SquareSumV1_zip/custom_opp_euleros_aarch64.run\"",
+  "command": "cd /home/ma-user/work/s9/repository/ascend-s9-operators && echo BRANCH=$(git branch --show-current) BEFORE=$(git rev-parse HEAD) && git status --short && git pull --ff-only origin main && echo AFTER=$(git rev-parse HEAD) && git status --short",
   "remote": "ma-user@dev-modelarts.cn-southwest-2.huaweicloud.com:32375",
-  "started_at": "2026-08-06T19:09:13.4321313+08:00",
-  "finished_at": "2026-08-06T19:10:02.1380333+08:00",
-  "duration_ms": 48705.902,
+  "started_at": "2026-08-06T19:12:48.8594792+08:00",
+  "finished_at": "2026-08-06T19:12:54.6408344+08:00",
+  "duration_ms": 5781.355,
   "exit_code": 0,
   "success": true,
   "log": "artifact/run.log"
