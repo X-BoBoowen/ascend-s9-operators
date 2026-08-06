@@ -1,5 +1,5 @@
 
-[2026-08-06 16:59:49 +0800] $ set -e; rel=/home/ma-user/work/s9/releases/squaresum_s02cg_20260806_1700; test ! -e $rel; mkdir -p $rel; cp /home/ma-user/work/s9/experiments/squaresum_s02cg_splitk_o64_20260806_1645/SquareSumV1.zip $rel/; cd $rel; unzip -q SquareSumV1.zip; echo ZIP_SHA; sha256sum SquareSumV1.zip; echo RUN_SHA_AND_MODE; sha256sum SquareSumV1_zip/custom_opp_euleros_aarch64.run; stat -c "%a %n" SquareSumV1_zip/custom_opp_euleros_aarch64.run; echo SOURCE_HASHES; sha256sum SquareSumV1_zip/op_host/* SquareSumV1_zip/op_kernel/*; echo ENTRY_COUNT; unzip -Z1 SquareSumV1.zip | wc -l
+[2026-08-06 17:00:53 +0800] $ set -e; cd /home/ma-user/work/s9/repository/ascend-s9-operators; git pull --ff-only origin main; printf "CLOUD_HEAD="; git rev-parse --short HEAD; printf "LOCAL_ROUTE="; grep -m1 NONCONTIGUOUS_SPLITK_MAX_OUTPUTS candidates/squaresum_s02bu_strided_grouped_splitk_20260806/SquareSumV1/op_host/square_sum_v1.cpp
 The environment has been set
 The environment has been set
  __  __               _          _                      _
@@ -15,16 +15,19 @@ Tips:
 2) Copy (Ctrl+C) and paste (Ctrl+V) on the jupyter terminal.
 3) Store your data in /home/ma-user/work, to which a persistent volume is mounted.
 4) Exercise caution when using plaintext passwords, hard-coded AK/SK, or directly entering them in the command line.
-ZIP_SHA
-c31babbc0802fd89b8bb9ed3b85294876338c84699afa61d8813dd39eb6e1f48  SquareSumV1.zip
-RUN_SHA_AND_MODE
-6936ce6ef7bb93ba81277c08069d12ced2e0a79c9c2a77a77d26505632b796f6  SquareSumV1_zip/custom_opp_euleros_aarch64.run
-755 SquareSumV1_zip/custom_opp_euleros_aarch64.run
-SOURCE_HASHES
-0dd1acfd256e9666299b0b634c4f16362aa61702395fb68a504a12ddec123f23  SquareSumV1_zip/op_host/CMakeLists.txt
-995ffa750158e3f986cb41735ea8ce806015dafcf482ea713d4110e9b84f10c3  SquareSumV1_zip/op_host/square_sum_v1.cpp
-e669820ab05878a8701fe2e6f33f4b44076ee93e74c1a308c3b5e8fcf54079f6  SquareSumV1_zip/op_host/square_sum_v1_tiling.h
-1c869b5cc1cfa847ac48ea1fbbf11f2517fcfe94629ef25fa08f207b29b50bf1  SquareSumV1_zip/op_kernel/CMakeLists.txt
-6ec6b4beeca7a49bf1fbeb0c9d270c824104adceef70cc777bf9117943e45352  SquareSumV1_zip/op_kernel/square_sum_v1.cpp
-ENTRY_COUNT
-9
+From https://github.com/X-BoBoowen/ascend-s9-operators
+ * branch            main       -> FETCH_HEAD
+   f7582cd..712358f  main       -> origin/main
+Updating f7582cd..712358f
+Fast-forward
+ README.md                                          |  37 ++++++-
+ SQUARESUM_S02CG_CLOUD_REPORT_20260806.md           | 119 +++++++++++++++++++++
+ artifact/result.json                               |   8 +-
+ artifact/run.log                                   |  42 +++-----
+ .../SquareSumV1/op_host/square_sum_v1.cpp          |   2 +-
+ ...s02cg_noncontiguous_o64_correctness_20260806.py |  95 ++++++++++++++++
+ 6 files changed, 268 insertions(+), 35 deletions(-)
+ create mode 100644 SQUARESUM_S02CG_CLOUD_REPORT_20260806.md
+ create mode 100644 diagnostics/squaresum_s02cg_noncontiguous_o64_correctness_20260806.py
+CLOUD_HEAD=712358f
+LOCAL_ROUTE=    constexpr uint64_t NONCONTIGUOUS_SPLITK_MAX_OUTPUTS = 64U;
