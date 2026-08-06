@@ -1,24 +1,38 @@
 
-[2026-08-06 14:21:53 +0800] $ set -e
-python3 - <<'PY'
-import re
-from pathlib import Path
-a=Path('/home/ma-user/work/s9/experiments/squaresum_s02bs_cloud_20260806_1324/strided_s02bs.log')
-b=Path('/home/ma-user/work/s9/experiments/squaresum_s02bt4_cloud_20260806_1416/strided_s02bt4_repeat.log')
-pat=re.compile(r'RESULT .*case=(\S+) dtype=(\S+).*median_us=([0-9.]+)')
-def load(p): return {(m.group(1),m.group(2)):float(m.group(3)) for m in map(pat.search,p.read_text().splitlines()) if m}
-x,y=load(a),load(b)
-changed=('inner1','inner2','inner4','inner8','inner16')
-for c in changed:
- av=sum(v for (k,d),v in x.items() if k==c); bv=sum(v for (k,d),v in y.items() if k==c)
- print(c, f'{av:.6f}', f'{bv:.6f}', f'{av/bv:.6f}x')
-ks=[k for k in x if k[0] in changed]
-print('TARGET15',f'{sum(x[k] for k in ks):.6f}',f'{sum(y[k] for k in ks):.6f}',f'{sum(x[k] for k in ks)/sum(y[k] for k in ks):.6f}x')
-print('ALL33',f'{sum(x.values()):.6f}',f'{sum(y.values()):.6f}',f'{sum(x.values())/sum(y.values()):.6f}x')
-reg=[(y[k]/x[k],k,x[k],y[k]) for k in x if y[k]>x[k]*1.10]
-print('REG_GT10',len(reg))
-for r,k,av,bv in sorted(reg,reverse=True): print(k,f'{av:.3f}->{bv:.3f}',f'{r:.3f}x')
-PY
+[2026-08-06 14:24:44 +0800] $ set -e
+repo=/home/ma-user/work/s9/repository/ascend-s9-operators
+full=/home/ma-user/work/s9/experiments/squaresum_s02bt2_cloud_20260806_1357
+final=/home/ma-user/work/s9/experiments/squaresum_s02bt4_cloud_20260806_1416
+release=/home/ma-user/work/s9/releases/squaresum_s02bt_20260806_1420
+cd "$repo"
+[ "$(git branch --show-current)" = main ]
+[ "$(git rev-parse --short HEAD)" = f29006c ]
+tail -n 1 "$full/full_cloud_gate.log"
+tail -n 1 "$full/full_extended_matrix.log"
+tail -n 1 "$full/full_random_matrix.log"
+tail -n 1 "$full/full_test_matrix.log"
+tail -n 1 "$full/full_bf16_semantic.log"
+tail -n 1 "$full/structural_correctness.log"
+tail -n 1 "$full/middle8_correctness.log"
+tail -n 1 "$full/trailing_singleton_correctness.log"
+tail -n 1 "$full/singleton_correctness.log"
+tail -n 1 "$full/grouped_scalar_correctness.log"
+tail -n 1 "$full/strided_full.log"
+tail -n 1 "$full/small_inner.log"
+tail -n 1 "$full/workspace_threshold.log"
+tail -n 1 "$full/workspace_crossover.log"
+tail -n 1 "$full/long_tail.log"
+tail -n 1 "$final/adaptive_grouped_correctness.log"
+tail -n 1 "$final/strided_s02bt4_repeat.log"
+cmp candidates/squaresum_s02bt_strided_grouped_padded_rows_20260806/SquareSumV1/op_host/square_sum_v1.cpp "$release/SquareSumV1_zip/op_host/square_sum_v1.cpp"
+cmp candidates/squaresum_s02bt_strided_grouped_padded_rows_20260806/SquareSumV1/op_kernel/square_sum_v1.cpp "$release/SquareSumV1_zip/op_kernel/square_sum_v1.cpp"
+sha256sum "$release/SquareSumV1.zip" "$release/SquareSumV1_zip/custom_opp_euleros_aarch64.run"
+echo S02BT_PRIMARY=971/971
+echo S02BT_SPECIALIZED=561/561
+echo S02BT_ADAPTIVE_BOUNDARY=69/69
+echo S02BT_PATH_MATRIX=33/33
+echo S02BT_TOTAL=1634/1634
+echo S02BT_FINAL_CLOUD_EVIDENCE_PASS
 The environment has been set
 The environment has been set
  __  __               _          _                      _
@@ -34,15 +48,28 @@ Tips:
 2) Copy (Ctrl+C) and paste (Ctrl+V) on the jupyter terminal.
 3) Store your data in /home/ma-user/work, to which a persistent volume is mounted.
 4) Exercise caution when using plaintext passwords, hard-coded AK/SK, or directly entering them in the command line.
-inner1 140.604002 160.096002 0.878248x
-inner2 3789.500045 2513.948059 1.507390x
-inner4 2468.344021 1440.856004 1.713109x
-inner8 1266.528011 597.859991 2.118436x
-inner16 697.888017 530.191994 1.316293x
-TARGET15 8362.864096 5242.952050 1.595068x
-ALL33 11680.390103 7045.946072 1.657746x
-REG_GT10 4
-('inner1', 'fp32') 46.504->55.184 1.187x
-('one_output_control', 'fp16') 51.344->60.780 1.184x
-('inner1', 'fp16') 46.632->53.296 1.143x
-('inner64_control', 'fp32') 45.948->52.420 1.141x
+SUMMARY_CORRECTNESS=45/45
+ALL EXTENDED PASS: 726 cases, seed=2026072813
+ALL RANDOM PASS: 150 cases, seed=2026072609
+ALL PASS: 46 directed cases
+ALL BF16 SEMANTIC PROBES PASS: 4 cases
+SUMMARY_S02BN_STRUCTURAL_CORRECTNESS=72/72
+SUMMARY_MIDDLE8_CORRECTNESS=60/60
+SUMMARY_TRAILING_SINGLETON_CORRECTNESS=120/120
+SUMMARY_SINGLETON_CORRECTNESS=72/72
+SUMMARY_S02BS_GROUPED_SCALAR label=S02BT2 passed=36/36
+SUMMARY label=S02BT2 passed=27/27
+SUMMARY label=S02BT2 passed=45/45
+SUMMARY label=S02BT2 passed=54/54
+SUMMARY label=S02BT2 passed=48/48
+SUMMARY label=S02BT2 passed=27/27
+SUMMARY_S02BT_ADAPTIVE_GROUPED label=S02BT4 passed=69/69
+SUMMARY label=unknown passed=33/33
+5e1aaec27c8465b44695130c6985d873c49acd807a6ad76ce8ff31c19d3dccf4  /home/ma-user/work/s9/releases/squaresum_s02bt_20260806_1420/SquareSumV1.zip
+87d7c68ec6f8c39d133c6ba5b4256c3f0d626a83755a27755efc170344519d72  /home/ma-user/work/s9/releases/squaresum_s02bt_20260806_1420/SquareSumV1_zip/custom_opp_euleros_aarch64.run
+S02BT_PRIMARY=971/971
+S02BT_SPECIALIZED=561/561
+S02BT_ADAPTIVE_BOUNDARY=69/69
+S02BT_PATH_MATRIX=33/33
+S02BT_TOTAL=1634/1634
+S02BT_FINAL_CLOUD_EVIDENCE_PASS
