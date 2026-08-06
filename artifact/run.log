@@ -1,20 +1,31 @@
 
-[2026-08-06 12:53:12 +0800] $ set -e
-REPO=/home/ma-user/work/s9/repository/ascend-s9-operators
-EXP=/home/ma-user/work/s9/experiments/squaresum_s02bn_cloud_20260806_1235
-RELEASE=/home/ma-user/work/s9/releases/squaresum_s02bn_20260806_1252
-cd "$REPO"
+[2026-08-06 13:43:35 +0800] $ set -e
+repo=/home/ma-user/work/s9/repository/ascend-s9-operators
+exp=/home/ma-user/work/s9/experiments/squaresum_s02bs_cloud_20260806_1324
+release=/home/ma-user/work/s9/releases/squaresum_s02bs_20260806_1341
+cd "$repo"
 git pull --ff-only origin main
-for f in \
- full_test_matrix.log full_cloud_gate.log full_random_matrix.log full_bf16_semantic.log full_extended_matrix.log \
- middle8_correctness.log singleton_correctness.log trailing_singleton_correctness.log full_crossover.log full_singleton_gap.log middle8_performance.log \
- fp3_sweep_s02bn.log noncontiguous_s02bn.log threshold_s02bn.log crossover_s02bn.log long_tail_s02bn.log structural_correctness.log; do
- tail -n 1 "$EXP/$f"
+[ "$(git branch --show-current)" = main ]
+[ "$(git rev-parse --short HEAD)" = 36f0f52 ]
+for f in full_test_matrix.log full_cloud_gate.log full_random_matrix.log full_bf16_semantic.log full_extended_matrix.log middle8_correctness.log singleton_correctness.log trailing_singleton_correctness.log full_crossover.log full_singleton_gap.log fp3_sweep_s02bs.log noncontiguous_s02bs.log threshold_s02bs.log crossover_s02bs.log long_tail_s02bs.log structural_correctness.log grouped_scalar_correctness.log strided_s02bs.log scale_s02bs.log; do
+  printf '%-38s ' "$f"
+  tail -n 1 "$exp/$f"
 done
-sha256sum "$EXP/build_out/custom_opp_euleros_aarch64.run" "$RELEASE/SquareSumV1_zip/custom_opp_euleros_aarch64.run"
-printf 'REPO_SHA=' && git rev-parse HEAD
-printf 'RELEASE_FILES=' && find "$RELEASE/SquareSumV1_zip" -type f | wc -l
-echo S02BN_FINAL_CLOUD_EVIDENCE_PASS_TOTAL_1571_OF_1571
+cmp candidates/squaresum_s02bs_strided_grouped_scalar_rows_20260806/SquareSumV1/op_host/square_sum_v1.cpp "$release/SquareSumV1_zip/op_host/square_sum_v1.cpp"
+cmp candidates/squaresum_s02bs_strided_grouped_scalar_rows_20260806/SquareSumV1/op_kernel/square_sum_v1.cpp "$release/SquareSumV1_zip/op_kernel/square_sum_v1.cpp"
+[ "$(find "$release/SquareSumV1_zip" -type f | wc -l)" -eq 6 ]
+printf 'RUN_SHA256='; sha256sum "$exp/build_out/custom_opp_euleros_aarch64.run" | awk '{print $1}'
+printf 'RELEASE_RUN_SHA256='; sha256sum "$release/SquareSumV1_zip/custom_opp_euleros_aarch64.run" | awk '{print $1}'
+printf 'ZIP_SHA256='; sha256sum "$release/SquareSumV1.zip" | awk '{print $1}'
+printf 'ZIP_SIZE='; stat -c %s "$release/SquareSumV1.zip"
+printf 'FINAL_INSTALL='; tail -n 1 "$exp/reinstall_final.log"
+printf 'REPO_HEAD='; git rev-parse HEAD
+echo S02BS_PRIMARY=971/971
+echo S02BS_SPECIALIZED=573/573
+echo S02BS_NEW_BOUNDARY=36/36
+echo S02BS_PATH_MATRIX=33/33
+echo S02BS_DEDUPLICATED_GATE_TOTAL=1613/1613
+echo S02BS_FINAL_CLOUD_EVIDENCE_PASS
 The environment has been set
 The environment has been set
  __  __               _          _                      _
@@ -32,30 +43,41 @@ Tips:
 4) Exercise caution when using plaintext passwords, hard-coded AK/SK, or directly entering them in the command line.
 From https://github.com/X-BoBoowen/ascend-s9-operators
  * branch            main       -> FETCH_HEAD
-   1d301e5..ccd4ae9  main       -> origin/main
-Updating 1d301e5..ccd4ae9
+   ca9903d..36f0f52  main       -> origin/main
+Updating ca9903d..36f0f52
 Fast-forward
- SQUARESUM_S02BN_CLOUD_REPORT_20260806.md | 6 ++++++
- 1 file changed, 6 insertions(+)
-ALL PASS: 46 directed cases
-SUMMARY_CORRECTNESS=45/45
-ALL RANDOM PASS: 150 cases, seed=2026072609
-ALL BF16 SEMANTIC PROBES PASS: 4 cases
-ALL EXTENDED PASS: 726 cases, seed=2026072813
-SUMMARY_MIDDLE8_CORRECTNESS=60/60
-SUMMARY_SINGLETON_CORRECTNESS=72/72
-SUMMARY_TRAILING_SINGLETON_CORRECTNESS=120/120
-SUMMARY_CROSSOVER=30/30
-SUMMARY_SINGLETON_GAP=15/15
-SUMMARY_MIDDLE8_COMPACT=27/27
-SUMMARY label=S02BN passed=39/39
-SUMMARY label=S02BN passed=36/36
-SUMMARY label=S02BN passed=54/54
-SUMMARY label=S02BN passed=48/48
-SUMMARY label=S02BN passed=27/27
-SUMMARY_S02BN_STRUCTURAL_CORRECTNESS=72/72
-f5e515f32453292ef2cfd3c636c0203db045c046bca01ea546d3bdaeac9fa0e2  /home/ma-user/work/s9/experiments/squaresum_s02bn_cloud_20260806_1235/build_out/custom_opp_euleros_aarch64.run
-f5e515f32453292ef2cfd3c636c0203db045c046bca01ea546d3bdaeac9fa0e2  /home/ma-user/work/s9/releases/squaresum_s02bn_20260806_1252/SquareSumV1_zip/custom_opp_euleros_aarch64.run
-REPO_SHA=ccd4ae977fe8b5745f64d454be1775357322a7bb
-RELEASE_FILES=6
-S02BN_FINAL_CLOUD_EVIDENCE_PASS_TOTAL_1571_OF_1571
+ README.md                                |  44 +++++++---
+ SQUARESUM_S02BS_CLOUD_REPORT_20260806.md | 145 +++++++++++++++++++++++++++++++
+ 2 files changed, 179 insertions(+), 10 deletions(-)
+ create mode 100644 SQUARESUM_S02BS_CLOUD_REPORT_20260806.md
+full_test_matrix.log                   ALL PASS: 46 directed cases
+full_cloud_gate.log                    SUMMARY_CORRECTNESS=45/45
+full_random_matrix.log                 ALL RANDOM PASS: 150 cases, seed=2026072609
+full_bf16_semantic.log                 ALL BF16 SEMANTIC PROBES PASS: 4 cases
+full_extended_matrix.log               ALL EXTENDED PASS: 726 cases, seed=2026072813
+middle8_correctness.log                SUMMARY_MIDDLE8_CORRECTNESS=60/60
+singleton_correctness.log              SUMMARY_SINGLETON_CORRECTNESS=72/72
+trailing_singleton_correctness.log     SUMMARY_TRAILING_SINGLETON_CORRECTNESS=120/120
+full_crossover.log                     SUMMARY_CROSSOVER=30/30
+full_singleton_gap.log                 SUMMARY_SINGLETON_GAP=15/15
+fp3_sweep_s02bs.log                    SUMMARY label=S02BS passed=39/39
+noncontiguous_s02bs.log                SUMMARY label=S02BS passed=36/36
+threshold_s02bs.log                    SUMMARY label=S02BS passed=54/54
+crossover_s02bs.log                    SUMMARY label=S02BS passed=48/48
+long_tail_s02bs.log                    SUMMARY label=S02BS passed=27/27
+structural_correctness.log             SUMMARY_S02BN_STRUCTURAL_CORRECTNESS=72/72
+grouped_scalar_correctness.log         SUMMARY_S02BS_GROUPED_SCALAR label=S02BS passed=36/36
+strided_s02bs.log                      SUMMARY label=S02BS passed=33/33
+scale_s02bs.log                        SUMMARY label=S02BS passed=12/12
+RUN_SHA256=5daba1d2af285683d8bd755a549eb112145126edfe04a815a18a461b0c5fd409
+RELEASE_RUN_SHA256=5daba1d2af285683d8bd755a549eb112145126edfe04a815a18a461b0c5fd409
+ZIP_SHA256=65ca55c54f3fe3a388411a109c024a7101ea0bc66e40be4959179af5396409fe
+ZIP_SIZE=687510
+FINAL_INSTALL=SUCCESS
+REPO_HEAD=36f0f52a86b43d99d317d4323c27f3b358022cdd
+S02BS_PRIMARY=971/971
+S02BS_SPECIALIZED=573/573
+S02BS_NEW_BOUNDARY=36/36
+S02BS_PATH_MATRIX=33/33
+S02BS_DEDUPLICATED_GATE_TOTAL=1613/1613
+S02BS_FINAL_CLOUD_EVIDENCE_PASS
