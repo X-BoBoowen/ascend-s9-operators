@@ -206,6 +206,30 @@
       "axes": [2, 0],
       "keep_dims": true,
       "tier": "strided_splitk"
+    },
+    {
+      "name": "short_tail_splitk_1023",
+      "route": "fast3",
+      "shape": [40, 8, 1023],
+      "axes": [0, 2],
+      "keep_dims": false,
+      "tier": "short_tail_splitk"
+    },
+    {
+      "name": "short_tail_splitk_200",
+      "route": "fast3",
+      "shape": [200, 8, 200],
+      "axes": [0, -1],
+      "keep_dims": true,
+      "tier": "short_tail_splitk"
+    },
+    {
+      "name": "short_tail_splitk_1",
+      "route": "fast3",
+      "shape": [200, 200, 8, 1],
+      "axes": [3, 1, 0],
+      "keep_dims": false,
+      "tier": "short_tail_splitk"
     }
   ]
 }
