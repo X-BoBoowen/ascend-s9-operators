@@ -1067,11 +1067,7 @@ static ge::graphStatus TilingFunc(gert::TilingContext* context)
                 ? groupedLongVectorWidth
                 : groupedMediumVectorWidth);
     uint64_t desiredBlocks = 0;
-    if (reduceMode == 5U) {
-        const uint64_t splitKGroups =
-            reduceElements / reduceDims[reduceRank - 1U];
-        desiredBlocks = (splitKGroups + 1U) / 2U;
-    } else if (reduceMode != 0U) {
+    if (reduceMode != 0U) {
         desiredBlocks = MAX_BLOCK_DIM;
     } else if (stridedGroupedRows) {
         desiredBlocks =
