@@ -83,26 +83,18 @@ bash diagnostics/run_squaresum_official_profile_20260806.sh \
   fast2_middle_aligned bf16 S02CA
 ```
 
-单次 SSH 会话内完成三组 BF16 core 矩阵后，使用以下命令判定：
+现在使用一个隔离入口完成源码重建、独立安装和三组 BF16 core 矩阵：
 
 ```bash
-bash diagnostics/run_squaresum_official_matrix_20260806.sh \
-  bf16 S02CA_A aba_s02ca_a core
-bash diagnostics/run_squaresum_official_matrix_20260806.sh \
-  bf16 S02CQ aba_s02cq core
-bash diagnostics/run_squaresum_official_matrix_20260806.sh \
-  bf16 S02CA_B aba_s02ca_b core
-
-python3 diagnostics/compare_squaresum_official_matrices_20260806.py \
-  --baseline-a artifact/aba_s02ca_a \
-  --candidate artifact/aba_s02cq \
-  --baseline-b artifact/aba_s02ca_b \
-  --output artifact/SquareSumV1/summary.json
+bash diagnostics/run_squaresum_s02cq_cloud_gate_20260806.sh \
+  /absolute/path/to/official/SquareSumV1/project \
+  /absolute/path/to/new/s02cq_gate_work_20260806
 ```
 
-三次矩阵之间必须分别安装对应的 S02CA、S02CQ、S02CA `.run`；必须放在
-同一个 `ssh_visible.ps1` 远端命令中执行，避免下一次服务器运行清空
-`artifact/` 后丢失前一组数据。
+入口从仓库内的正式 S02CA 基线和 S02CQ 候选重建两个 `.run`，使用两个隔离
+的 `--install-path`，并让每组测试在只加载对应 `set_env.bash` 的子进程中
+执行。它必须放在同一个可见 SSH 远端命令中运行，避免服务器下一次运行
+覆盖 `artifact/` 后丢失前一组数据。
 
 ## 下次云端执行顺序
 

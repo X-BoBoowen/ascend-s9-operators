@@ -8,11 +8,19 @@ tier="${4:-core}"
 
 if [[ ! "${dtype_name}" =~ ^(fp16|bf16|fp32)$ ]] ||
    [[ ! "${label}" =~ ^[A-Za-z0-9_.-]+$ ]] ||
-   [[ ! "${output_name}" =~ ^[A-Za-z0-9_.-]+$ ]] ||
+   [[ ! "${output_name}" =~ ^[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)*$ ]] ||
    [[ ! "${tier}" =~ ^[A-Za-z0-9_.-]+$ ]]; then
     echo "dtype, label, output name, or tier contains unsupported characters"
     exit 2
 fi
+
+IFS='/' read -r -a output_segments <<< "${output_name}"
+for segment in "${output_segments[@]}"; do
+    if [[ "${segment}" == "." || "${segment}" == ".." ]]; then
+        echo "output name contains an unsafe path segment"
+        exit 2
+    fi
+done
 
 script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
 repo_root="$(cd -- "${script_dir}/.." && pwd -P)"
