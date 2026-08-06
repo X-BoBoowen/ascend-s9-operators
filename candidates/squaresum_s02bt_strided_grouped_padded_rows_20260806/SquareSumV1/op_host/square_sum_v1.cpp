@@ -428,7 +428,6 @@ static ge::graphStatus TilingFunc(gert::TilingContext* context)
     const uint64_t elementsPerBlock =
         32U / inputTypeBytes;
     constexpr uint64_t STRIDED_GROUPED_MAX_WIDTH = 8U;
-    constexpr uint64_t STRIDED_GROUPED_MIN_TASKS = 4U;
     constexpr uint64_t NORMAL_CHUNK_ELEMENTS = 8192U;
     uint32_t stridedGroupedOutputAxis = outputRank;
     uint32_t stridedGroupedWidth = 0U;
@@ -473,6 +472,10 @@ static ge::graphStatus TilingFunc(gert::TilingContext* context)
                 (innerElements +
                  elementsPerBlock - 1U) /
                 elementsPerBlock * elementsPerBlock;
+            const uint64_t minimumGroupedTasks =
+                innerElements <= 8U
+                    ? SMALL_FAST_BLOCK_DIM
+                    : 4U;
             if (SafeMultiply(
                     groupedOutputDim,
                     innerElements,
@@ -510,7 +513,7 @@ static ge::graphStatus TilingFunc(gert::TilingContext* context)
                             groupedTasksPerOuter,
                             candidateTasks) ||
                         candidateTasks <
-                            STRIDED_GROUPED_MIN_TASKS) {
+                            minimumGroupedTasks) {
                         continue;
                     }
                     stridedGroupedWidth =
