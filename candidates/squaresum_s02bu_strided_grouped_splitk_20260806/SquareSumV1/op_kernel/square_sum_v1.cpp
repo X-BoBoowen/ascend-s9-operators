@@ -249,7 +249,8 @@ public:
             if (fastPath_ == 4U) {
                 if (innerElements_ == 1U) {
                     ProcessStridedGroupedRows();
-                } else if (innerElements_ == 2U) {
+                } else if (innerElements_ == 2U &&
+                           reduceDims_[reduceRank_ - 1U] >= 4U) {
                     ProcessStridedGroupedCompactInner2Rows();
                 } else {
                     ProcessStridedGroupedPaddedRows();
