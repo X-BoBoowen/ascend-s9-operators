@@ -1617,6 +1617,10 @@ private:
                     vToMte2Event_);
             }
 
+            AscendC::SetFlag<AscendC::HardEvent::V_S>(
+                vToSEvent_);
+            AscendC::WaitFlag<AscendC::HardEvent::V_S>(
+                vToSEvent_);
             for (uint32_t row = 0U;
                  row < activeRows;
                  ++row) {
@@ -1625,35 +1629,20 @@ private:
                         row * innerElements_);
                 const uint32_t accumulateOffset =
                     row * floatStride;
-                if constexpr (
-                    std::is_same<T, float>::value) {
-                    AscendC::Adds(
-                        outputLocal[outputOffset],
-                        accumulateLocal[accumulateOffset],
-                        0.0f,
-                        static_cast<uint32_t>(
-                            innerElements_));
-                } else if constexpr (
-                    std::is_same<T, half>::value) {
-                    AscendC::Cast(
-                        outputLocal[outputOffset],
-                        accumulateLocal[accumulateOffset],
-                        AscendC::RoundMode::CAST_NONE,
-                        static_cast<uint32_t>(
-                            innerElements_));
-                } else {
-                    AscendC::Cast(
-                        outputLocal[outputOffset],
-                        accumulateLocal[accumulateOffset],
-                        AscendC::RoundMode::CAST_RINT,
-                        static_cast<uint32_t>(
-                            innerElements_));
+                for (uint32_t inner = 0U;
+                     inner < innerElements_;
+                     ++inner) {
+                    outputLocal.SetValue(
+                        outputOffset + inner,
+                        OutputFromFloat<T>(
+                            accumulateLocal.GetValue(
+                                accumulateOffset + inner)));
                 }
             }
-            AscendC::SetFlag<AscendC::HardEvent::V_MTE3>(
-                vToMte3Event_);
-            AscendC::WaitFlag<AscendC::HardEvent::V_MTE3>(
-                vToMte3Event_);
+            AscendC::SetFlag<AscendC::HardEvent::S_MTE3>(
+                sToMte3Event_);
+            AscendC::WaitFlag<AscendC::HardEvent::S_MTE3>(
+                sToMte3Event_);
             AscendC::DataCopyExtParams outputCopy;
             outputCopy.blockCount = 1U;
             outputCopy.blockLen =
@@ -1665,10 +1654,10 @@ private:
                 outputGm_[outputStart],
                 outputLocal,
                 outputCopy);
-            AscendC::SetFlag<AscendC::HardEvent::MTE3_V>(
-                mte3ToVEvent_);
-            AscendC::WaitFlag<AscendC::HardEvent::MTE3_V>(
-                mte3ToVEvent_);
+            AscendC::SetFlag<AscendC::HardEvent::MTE3_S>(
+                mte3ToSEvent_);
+            AscendC::WaitFlag<AscendC::HardEvent::MTE3_S>(
+                mte3ToSEvent_);
         }
     }
 
