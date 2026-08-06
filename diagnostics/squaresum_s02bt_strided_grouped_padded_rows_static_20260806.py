@@ -33,7 +33,7 @@ def select_width(group_dim, outer_rows, last_reduce, inner, type_bytes):
         if width * last_reduce * padded_inner > 8192:
             continue
         tasks = outer_rows * ((group_dim + width - 1) // width)
-        if tasks >= 32:
+        if tasks >= 4:
             return width, tasks
     return 0, 0
 
@@ -67,11 +67,11 @@ def main():
     assert "TILING_KEY_IS(14)" not in kernel
 
     assert select_width(256, 1, 64, 1, 2) == (8, 32)
-    assert select_width(128, 1, 64, 2, 2) == (4, 32)
-    assert select_width(64, 1, 64, 4, 2) == (2, 32)
-    assert select_width(32, 1, 64, 8, 2) == (1, 32)
-    assert select_width(16, 1, 64, 16, 2) == (0, 0)
-    assert select_width(16, 2, 64, 16, 2) == (1, 32)
+    assert select_width(128, 1, 64, 2, 2) == (8, 16)
+    assert select_width(64, 1, 64, 4, 2) == (8, 8)
+    assert select_width(32, 1, 64, 8, 2) == (8, 4)
+    assert select_width(16, 1, 64, 16, 2) == (4, 4)
+    assert select_width(16, 2, 64, 16, 2) == (8, 4)
 
     print("S02BT_STATIC_PASS changed=host,kernel adaptive_width_checks=6")
 
