@@ -1450,7 +1450,7 @@ private:
 
     __aicore__ inline void ProcessStridedGroupedSplitK()
     {
-        constexpr uint32_t VECTOR_ROWS = 8U;
+        constexpr uint32_t VECTOR_ROWS = GROUPED_VECTOR_WIDTH;
         AscendC::LocalTensor<T> inputLocal =
             inputBuffer_.Get<T>();
         AscendC::LocalTensor<float> partialLocal =
@@ -1942,7 +1942,7 @@ private:
 
     __aicore__ inline void ProcessStridedPower2CompactSplitK()
     {
-        constexpr uint32_t VECTOR_ROWS = 8U;
+        constexpr uint32_t VECTOR_ROWS = GROUPED_VECTOR_WIDTH;
         AscendC::LocalTensor<T> inputLocal =
             inputBuffer_.Get<T>();
         AscendC::LocalTensor<float> partialLocal =
@@ -6544,6 +6544,24 @@ extern "C" __global__ __aicore__ void square_sum_v1(
             8U,
             true> op;
         op.Init(input, output, workspace, tilingData);
+        op.Process();
+    } else if (TILING_KEY_IS(14)) {
+        GET_TILING_DATA(tilingData, tiling);
+        if (tilingData.outputElements == 0) {
+            return;
+        }
+        GM_ADDR userWorkspace =
+            tilingData.reduceMode != 0U
+                ? AscendC::GetUserWorkspace(workspace)
+                : workspace;
+        KernelSquareSumV1<
+            DTYPE_INPUT,
+            LONG_CHUNK,
+            true,
+            false,
+            false,
+            1U> op;
+        op.Init(input, output, userWorkspace, tilingData);
         op.Process();
     }
 }

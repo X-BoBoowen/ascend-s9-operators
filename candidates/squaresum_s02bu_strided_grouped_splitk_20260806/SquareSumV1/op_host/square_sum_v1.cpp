@@ -438,6 +438,7 @@ static ge::graphStatus TilingFunc(gert::TilingContext* context)
     uint64_t stridedGroupedTasks = 0U;
     bool stridedGroupedRows = false;
     bool stridedGroupedSplitK = false;
+    bool stridedGroupedLongChunk = false;
     if (fastPath == 4U &&
         reduceMode == 0U &&
         reduceRank > 0U &&
@@ -487,8 +488,6 @@ static ge::graphStatus TilingFunc(gert::TilingContext* context)
                 outputElements % groupedOutputElements == 0U) {
                 stridedGroupedOuterRows =
                     outputElements / groupedOutputElements;
-                uint64_t splitKBufferRows = 0U;
-                uint64_t splitKBufferElements = 0U;
                 uint64_t splitKTasksPerOuter = 0U;
                 uint64_t splitKTasks = 0U;
                 const uint64_t outerReduceGroups =
@@ -532,38 +531,91 @@ static ge::graphStatus TilingFunc(gert::TilingContext* context)
                         break;
                     }
                 }
+                if ((innerElements == 4U ||
+                     innerElements == 8U ||
+                     innerElements == 16U) &&
+                    !stridedGroupedSplitK &&
+                    outerReduceGroups >= MAX_BLOCK_DIM &&
+                    inputElements >= STRIDED_SPLITK_MIN_INPUT &&
+                    outputElements <=
+                        STRIDED_SPLITK_MAX_OUTPUTS) {
+                    for (uint64_t width =
+                             STRIDED_GROUPED_MAX_WIDTH;
+                         width >= 1U;
+                         width /= 2U) {
+                        uint64_t compactRows = 0U;
+                        uint64_t compactElements = 0U;
+                        if (groupedOutputDim < width ||
+                            !SafeMultiply(
+                                width,
+                                lastReduceDim,
+                                compactRows) ||
+                            !SafeMultiply(
+                                compactRows,
+                                innerElements,
+                                compactElements) ||
+                            compactElements >
+                                2U * NORMAL_CHUNK_ELEMENTS ||
+                            (compactElements >
+                                 NORMAL_CHUNK_ELEMENTS &&
+                             width != 1U)) {
+                            continue;
+                        }
+                        splitKTasksPerOuter =
+                            (groupedOutputDim + width - 1U) / width;
+                        if (!SafeMultiply(
+                                stridedGroupedOuterRows,
+                                splitKTasksPerOuter,
+                                splitKTasks)) {
+                            continue;
+                        }
+                        stridedGroupedWidth =
+                            static_cast<uint32_t>(width);
+                        stridedGroupedTasks = splitKTasks;
+                        stridedGroupedRows = true;
+                        stridedGroupedSplitK = true;
+                        stridedGroupedLongChunk =
+                            compactElements > NORMAL_CHUNK_ELEMENTS;
+                        break;
+                    }
+                }
                 if (innerElements >= 4U &&
+                    innerElements != 8U &&
+                    innerElements != 16U &&
                     !stridedGroupedSplitK &&
                     groupedOutputDim >=
                         STRIDED_GROUPED_MAX_WIDTH &&
                     outerReduceGroups >= MAX_BLOCK_DIM &&
                     inputElements >= STRIDED_SPLITK_MIN_INPUT &&
                     outputElements <=
-                        STRIDED_SPLITK_MAX_OUTPUTS &&
-                    SafeMultiply(
-                        STRIDED_GROUPED_MAX_WIDTH,
-                        lastReduceDim,
-                        splitKBufferRows) &&
-                    SafeMultiply(
-                        splitKBufferRows,
-                        paddedInnerElements,
-                        splitKBufferElements) &&
-                    splitKBufferElements <=
-                        NORMAL_CHUNK_ELEMENTS) {
-                    splitKTasksPerOuter =
-                        (groupedOutputDim +
-                         STRIDED_GROUPED_MAX_WIDTH - 1U) /
-                        STRIDED_GROUPED_MAX_WIDTH;
+                        STRIDED_SPLITK_MAX_OUTPUTS) {
+                    uint64_t splitKBufferRows = 0U;
+                    uint64_t splitKBufferElements = 0U;
                     if (SafeMultiply(
-                            stridedGroupedOuterRows,
-                            splitKTasksPerOuter,
-                            splitKTasks)) {
-                        stridedGroupedWidth =
-                            static_cast<uint32_t>(
-                                STRIDED_GROUPED_MAX_WIDTH);
-                        stridedGroupedTasks = splitKTasks;
-                        stridedGroupedRows = true;
-                        stridedGroupedSplitK = true;
+                            STRIDED_GROUPED_MAX_WIDTH,
+                            lastReduceDim,
+                            splitKBufferRows) &&
+                        SafeMultiply(
+                            splitKBufferRows,
+                            paddedInnerElements,
+                            splitKBufferElements) &&
+                        splitKBufferElements <=
+                            NORMAL_CHUNK_ELEMENTS) {
+                        splitKTasksPerOuter =
+                            (groupedOutputDim +
+                             STRIDED_GROUPED_MAX_WIDTH - 1U) /
+                            STRIDED_GROUPED_MAX_WIDTH;
+                        if (SafeMultiply(
+                                stridedGroupedOuterRows,
+                                splitKTasksPerOuter,
+                                splitKTasks)) {
+                            stridedGroupedWidth =
+                                static_cast<uint32_t>(
+                                    STRIDED_GROUPED_MAX_WIDTH);
+                            stridedGroupedTasks = splitKTasks;
+                            stridedGroupedRows = true;
+                            stridedGroupedSplitK = true;
+                        }
                     }
                 }
                 for (uint64_t width =
@@ -1212,13 +1264,15 @@ static ge::graphStatus TilingFunc(gert::TilingContext* context)
         reduceElements == 0U
             ? 13U
             : (stridedGroupedRows
-            ? (stridedGroupedWidth == 8U
+            ? (stridedGroupedSplitK && stridedGroupedLongChunk
+                ? 14U
+                : (stridedGroupedWidth == 8U
                 ? 5U
                 : (stridedGroupedWidth == 4U
                     ? 9U
                     : (stridedGroupedWidth == 2U
                         ? 10U
-                        : 11U)))
+                        : 11U))))
             : (noncontiguousSplitK || noncontiguousLongTailSplitK
             ? 4U
             : (lastVector8
