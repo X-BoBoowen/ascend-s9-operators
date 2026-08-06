@@ -1,8 +1,9 @@
 
-[2026-08-06 12:05:06 +0800] $ set -e
-EXP=/home/ma-user/work/s9/experiments/squaresum_s02bk_cloud_20260806_1152
+[2026-08-06 12:26:00 +0800] $ set -e
+EXP=/home/ma-user/work/s9/experiments/squaresum_s02bm_cloud_20260806_1216
 REPO=/home/ma-user/work/s9/repository/ascend-s9-operators
 cd "$REPO"
+git pull --ff-only origin main
 echo "REPO_SHA=$(git rev-parse HEAD)"
 tail -n 1 "$EXP/full_test_matrix.log"
 tail -n 1 "$EXP/full_cloud_gate.log"
@@ -15,11 +16,12 @@ tail -n 1 "$EXP/trailing_singleton_correctness.log"
 tail -n 1 "$EXP/full_crossover.log"
 tail -n 1 "$EXP/full_singleton_gap.log"
 tail -n 1 "$EXP/middle8_performance.log"
-tail -n 1 "$EXP/fp3_sweep_s02bk.log"
-tail -n 1 "$EXP/noncontiguous_s02bk.log"
-tail -n 1 "$EXP/small_inner_s02bk.log"
+tail -n 1 "$EXP/fp3_sweep_s02bm.log"
+tail -n 1 "$EXP/noncontiguous_s02bm.log"
+tail -n 1 "$EXP/threshold_s02bm.log"
+tail -n 1 "$EXP/crossover_s02bm.log"
 sha256sum "$EXP/build_out/custom_opp_euleros_aarch64.run"
-echo S02BK_FINAL_CLOUD_EVIDENCE_PASS
+echo S02BM_FINAL_CLOUD_EVIDENCE_PASS
 The environment has been set
 The environment has been set
  __  __               _          _                      _
@@ -35,7 +37,17 @@ Tips:
 2) Copy (Ctrl+C) and paste (Ctrl+V) on the jupyter terminal.
 3) Store your data in /home/ma-user/work, to which a persistent volume is mounted.
 4) Exercise caution when using plaintext passwords, hard-coded AK/SK, or directly entering them in the command line.
-REPO_SHA=9ee4464799ca79b1b12b6516168a33a709f414ce
+From https://github.com/X-BoBoowen/ascend-s9-operators
+ * branch            main       -> FETCH_HEAD
+   de566c8..5cfc7fe  main       -> origin/main
+Updating de566c8..5cfc7fe
+Fast-forward
+ README.md                                |  16 +--
+ SQUARESUM_S02BK_CLOUD_REPORT_20260806.md |  17 ++++
+ SQUARESUM_S02BM_CLOUD_REPORT_20260806.md | 163 +++++++++++++++++++++++++++++++
+ 3 files changed, 189 insertions(+), 7 deletions(-)
+ create mode 100644 SQUARESUM_S02BM_CLOUD_REPORT_20260806.md
+REPO_SHA=5cfc7fef386fcfacb95f3ae8d3466a98dde037f3
 ALL PASS: 46 directed cases
 SUMMARY_CORRECTNESS=45/45
 ALL RANDOM PASS: 150 cases, seed=2026072609
@@ -47,8 +59,9 @@ SUMMARY_TRAILING_SINGLETON_CORRECTNESS=120/120
 SUMMARY_CROSSOVER=30/30
 SUMMARY_SINGLETON_GAP=15/15
 SUMMARY_MIDDLE8_COMPACT=27/27
-SUMMARY label=S02BK passed=39/39
-SUMMARY label=S02BK passed=36/36
-SUMMARY label=S02BK passed=45/45
-7f5253c14823dc7c9215862cf3f90f59fe2ff57a108c6947e8e36597a4f73a5a  /home/ma-user/work/s9/experiments/squaresum_s02bk_cloud_20260806_1152/build_out/custom_opp_euleros_aarch64.run
-S02BK_FINAL_CLOUD_EVIDENCE_PASS
+SUMMARY label=S02BM passed=39/39
+SUMMARY label=S02BM passed=36/36
+SUMMARY label=S02BM passed=54/54
+SUMMARY label=S02BM passed=48/48
+62b6f78e9592c44f7832bb81063521f292165b00f95432ed7d10f8ace637eddb  /home/ma-user/work/s9/experiments/squaresum_s02bm_cloud_20260806_1216/build_out/custom_opp_euleros_aarch64.run
+S02BM_FINAL_CLOUD_EVIDENCE_PASS

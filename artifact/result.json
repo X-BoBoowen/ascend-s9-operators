@@ -1,9 +1,9 @@
 {
-  "command": "set -e\nEXP=/home/ma-user/work/s9/experiments/squaresum_s02bk_cloud_20260806_1152\nREPO=/home/ma-user/work/s9/repository/ascend-s9-operators\ncd \"$REPO\"\necho \"REPO_SHA=$(git rev-parse HEAD)\"\ntail -n 1 \"$EXP/full_test_matrix.log\"\ntail -n 1 \"$EXP/full_cloud_gate.log\"\ntail -n 1 \"$EXP/full_random_matrix.log\"\ntail -n 1 \"$EXP/full_bf16_semantic.log\"\ntail -n 1 \"$EXP/full_extended_matrix.log\"\ntail -n 1 \"$EXP/middle8_correctness.log\"\ntail -n 1 \"$EXP/singleton_correctness.log\"\ntail -n 1 \"$EXP/trailing_singleton_correctness.log\"\ntail -n 1 \"$EXP/full_crossover.log\"\ntail -n 1 \"$EXP/full_singleton_gap.log\"\ntail -n 1 \"$EXP/middle8_performance.log\"\ntail -n 1 \"$EXP/fp3_sweep_s02bk.log\"\ntail -n 1 \"$EXP/noncontiguous_s02bk.log\"\ntail -n 1 \"$EXP/small_inner_s02bk.log\"\nsha256sum \"$EXP/build_out/custom_opp_euleros_aarch64.run\"\necho S02BK_FINAL_CLOUD_EVIDENCE_PASS",
+  "command": "set -e\nEXP=/home/ma-user/work/s9/experiments/squaresum_s02bm_cloud_20260806_1216\nREPO=/home/ma-user/work/s9/repository/ascend-s9-operators\ncd \"$REPO\"\ngit pull --ff-only origin main\necho \"REPO_SHA=$(git rev-parse HEAD)\"\ntail -n 1 \"$EXP/full_test_matrix.log\"\ntail -n 1 \"$EXP/full_cloud_gate.log\"\ntail -n 1 \"$EXP/full_random_matrix.log\"\ntail -n 1 \"$EXP/full_bf16_semantic.log\"\ntail -n 1 \"$EXP/full_extended_matrix.log\"\ntail -n 1 \"$EXP/middle8_correctness.log\"\ntail -n 1 \"$EXP/singleton_correctness.log\"\ntail -n 1 \"$EXP/trailing_singleton_correctness.log\"\ntail -n 1 \"$EXP/full_crossover.log\"\ntail -n 1 \"$EXP/full_singleton_gap.log\"\ntail -n 1 \"$EXP/middle8_performance.log\"\ntail -n 1 \"$EXP/fp3_sweep_s02bm.log\"\ntail -n 1 \"$EXP/noncontiguous_s02bm.log\"\ntail -n 1 \"$EXP/threshold_s02bm.log\"\ntail -n 1 \"$EXP/crossover_s02bm.log\"\nsha256sum \"$EXP/build_out/custom_opp_euleros_aarch64.run\"\necho S02BM_FINAL_CLOUD_EVIDENCE_PASS",
   "remote": "ma-user@dev-modelarts.cn-southwest-2.huaweicloud.com:32375",
-  "started_at": "2026-08-06T12:05:03.0996900+08:00",
-  "finished_at": "2026-08-06T12:05:07.7760046+08:00",
-  "duration_ms": 4676.315,
+  "started_at": "2026-08-06T12:25:54.0415719+08:00",
+  "finished_at": "2026-08-06T12:26:02.3710478+08:00",
+  "duration_ms": 8329.476,
   "exit_code": 0,
   "success": true,
   "log": "artifact/run.log"
