@@ -1,38 +1,13 @@
 
-[2026-08-06 14:24:44 +0800] $ set -e
+[2026-08-06 15:11:02 +0800] $ set -e
+source /home/ma-user/Ascend/cann-8.5.0/bin/setenv.bash
 repo=/home/ma-user/work/s9/repository/ascend-s9-operators
-full=/home/ma-user/work/s9/experiments/squaresum_s02bt2_cloud_20260806_1357
-final=/home/ma-user/work/s9/experiments/squaresum_s02bt4_cloud_20260806_1416
-release=/home/ma-user/work/s9/releases/squaresum_s02bt_20260806_1420
-cd "$repo"
-[ "$(git branch --show-current)" = main ]
-[ "$(git rev-parse --short HEAD)" = f29006c ]
-tail -n 1 "$full/full_cloud_gate.log"
-tail -n 1 "$full/full_extended_matrix.log"
-tail -n 1 "$full/full_random_matrix.log"
-tail -n 1 "$full/full_test_matrix.log"
-tail -n 1 "$full/full_bf16_semantic.log"
-tail -n 1 "$full/structural_correctness.log"
-tail -n 1 "$full/middle8_correctness.log"
-tail -n 1 "$full/trailing_singleton_correctness.log"
-tail -n 1 "$full/singleton_correctness.log"
-tail -n 1 "$full/grouped_scalar_correctness.log"
-tail -n 1 "$full/strided_full.log"
-tail -n 1 "$full/small_inner.log"
-tail -n 1 "$full/workspace_threshold.log"
-tail -n 1 "$full/workspace_crossover.log"
-tail -n 1 "$full/long_tail.log"
-tail -n 1 "$final/adaptive_grouped_correctness.log"
-tail -n 1 "$final/strided_s02bt4_repeat.log"
-cmp candidates/squaresum_s02bt_strided_grouped_padded_rows_20260806/SquareSumV1/op_host/square_sum_v1.cpp "$release/SquareSumV1_zip/op_host/square_sum_v1.cpp"
-cmp candidates/squaresum_s02bt_strided_grouped_padded_rows_20260806/SquareSumV1/op_kernel/square_sum_v1.cpp "$release/SquareSumV1_zip/op_kernel/square_sum_v1.cpp"
-sha256sum "$release/SquareSumV1.zip" "$release/SquareSumV1_zip/custom_opp_euleros_aarch64.run"
-echo S02BT_PRIMARY=971/971
-echo S02BT_SPECIALIZED=561/561
-echo S02BT_ADAPTIVE_BOUNDARY=69/69
-echo S02BT_PATH_MATRIX=33/33
-echo S02BT_TOTAL=1634/1634
-echo S02BT_FINAL_CLOUD_EVIDENCE_PASS
+exp=/home/ma-user/work/s9/experiments/squaresum_s02ca_final_cloud_20260806_1507
+git -C "$repo" pull --ff-only origin main
+export PYTHONPATH="$repo/validation/SquareSumV1:${PYTHONPATH:-}"
+python3 "$repo/diagnostics/squaresum_s02ca_splitk_correctness_20260806.py" S02CA 2>&1 | tee "$exp/splitk_boundary_s02ca.log"
+test ${PIPESTATUS[0]} -eq 0
+tail -n 1 "$exp/splitk_boundary_s02ca.log"
 The environment has been set
 The environment has been set
  __  __               _          _                      _
@@ -48,28 +23,49 @@ Tips:
 2) Copy (Ctrl+C) and paste (Ctrl+V) on the jupyter terminal.
 3) Store your data in /home/ma-user/work, to which a persistent volume is mounted.
 4) Exercise caution when using plaintext passwords, hard-coded AK/SK, or directly entering them in the command line.
-SUMMARY_CORRECTNESS=45/45
-ALL EXTENDED PASS: 726 cases, seed=2026072813
-ALL RANDOM PASS: 150 cases, seed=2026072609
-ALL PASS: 46 directed cases
-ALL BF16 SEMANTIC PROBES PASS: 4 cases
-SUMMARY_S02BN_STRUCTURAL_CORRECTNESS=72/72
-SUMMARY_MIDDLE8_CORRECTNESS=60/60
-SUMMARY_TRAILING_SINGLETON_CORRECTNESS=120/120
-SUMMARY_SINGLETON_CORRECTNESS=72/72
-SUMMARY_S02BS_GROUPED_SCALAR label=S02BT2 passed=36/36
-SUMMARY label=S02BT2 passed=27/27
-SUMMARY label=S02BT2 passed=45/45
-SUMMARY label=S02BT2 passed=54/54
-SUMMARY label=S02BT2 passed=48/48
-SUMMARY label=S02BT2 passed=27/27
-SUMMARY_S02BT_ADAPTIVE_GROUPED label=S02BT4 passed=69/69
-SUMMARY label=unknown passed=33/33
-5e1aaec27c8465b44695130c6985d873c49acd807a6ad76ce8ff31c19d3dccf4  /home/ma-user/work/s9/releases/squaresum_s02bt_20260806_1420/SquareSumV1.zip
-87d7c68ec6f8c39d133c6ba5b4256c3f0d626a83755a27755efc170344519d72  /home/ma-user/work/s9/releases/squaresum_s02bt_20260806_1420/SquareSumV1_zip/custom_opp_euleros_aarch64.run
-S02BT_PRIMARY=971/971
-S02BT_SPECIALIZED=561/561
-S02BT_ADAPTIVE_BOUNDARY=69/69
-S02BT_PATH_MATRIX=33/33
-S02BT_TOTAL=1634/1634
-S02BT_FINAL_CLOUD_EVIDENCE_PASS
+From https://github.com/X-BoBoowen/ascend-s9-operators
+ * branch            main       -> FETCH_HEAD
+   2c17660..ad25fbd  main       -> origin/main
+Updating 2c17660..ad25fbd
+Fast-forward
+ .../squaresum_s02ca_splitk_correctness_20260806.py | 94 ++++++++++++++++++++++
+ 1 file changed, 94 insertions(+)
+ create mode 100644 diagnostics/squaresum_s02ca_splitk_correctness_20260806.py
+PASS label=S02CA case=min_outer dtype=fp16 shape=(40, 64, 64, 4) axes=(0, 2) keep_dims=0 inputs=655360 outputs=256 max_abs=0
+PASS label=S02CA case=min_outer dtype=bf16 shape=(40, 64, 64, 4) axes=(0, 2) keep_dims=0 inputs=655360 outputs=256 max_abs=0
+PASS label=S02CA case=min_outer dtype=fp32 shape=(40, 64, 64, 4) axes=(0, 2) keep_dims=0 inputs=655360 outputs=256 max_abs=1.90735e-06
+PASS label=S02CA case=outer41_output_tail dtype=fp16 shape=(41, 73, 32, 7) axes=(0, 2) keep_dims=0 inputs=670432 outputs=511 max_abs=0
+PASS label=S02CA case=outer41_output_tail dtype=bf16 shape=(41, 73, 32, 7) axes=(0, 2) keep_dims=0 inputs=670432 outputs=511 max_abs=0
+PASS label=S02CA case=outer41_output_tail dtype=fp32 shape=(41, 73, 32, 7) axes=(0, 2) keep_dims=0 inputs=670432 outputs=511 max_abs=9.53674e-07
+PASS label=S02CA case=last_reduce_2 dtype=fp16 shape=(256, 64, 2, 8) axes=(0, 2) keep_dims=0 inputs=262144 outputs=512 max_abs=0
+PASS label=S02CA case=last_reduce_2 dtype=bf16 shape=(256, 64, 2, 8) axes=(0, 2) keep_dims=0 inputs=262144 outputs=512 max_abs=0
+PASS label=S02CA case=last_reduce_2 dtype=fp32 shape=(256, 64, 2, 8) axes=(0, 2) keep_dims=0 inputs=262144 outputs=512 max_abs=1.66893e-06
+PASS label=S02CA case=last_reduce_4 dtype=fp16 shape=(128, 64, 4, 8) axes=(0, 2) keep_dims=0 inputs=262144 outputs=512 max_abs=0
+PASS label=S02CA case=last_reduce_4 dtype=bf16 shape=(128, 64, 4, 8) axes=(0, 2) keep_dims=0 inputs=262144 outputs=512 max_abs=0
+PASS label=S02CA case=last_reduce_4 dtype=fp32 shape=(128, 64, 4, 8) axes=(0, 2) keep_dims=0 inputs=262144 outputs=512 max_abs=9.53674e-07
+PASS label=S02CA case=last_reduce_8 dtype=fp16 shape=(64, 64, 8, 8) axes=(0, 2) keep_dims=0 inputs=262144 outputs=512 max_abs=0
+PASS label=S02CA case=last_reduce_8 dtype=bf16 shape=(64, 64, 8, 8) axes=(0, 2) keep_dims=0 inputs=262144 outputs=512 max_abs=0
+PASS label=S02CA case=last_reduce_8 dtype=fp32 shape=(64, 64, 8, 8) axes=(0, 2) keep_dims=0 inputs=262144 outputs=512 max_abs=7.15256e-07
+PASS label=S02CA case=last_reduce_16 dtype=fp16 shape=(40, 64, 16, 8) axes=(0, 2) keep_dims=0 inputs=327680 outputs=512 max_abs=0
+PASS label=S02CA case=last_reduce_16 dtype=bf16 shape=(40, 64, 16, 8) axes=(0, 2) keep_dims=0 inputs=327680 outputs=512 max_abs=0
+PASS label=S02CA case=last_reduce_16 dtype=fp32 shape=(40, 64, 16, 8) axes=(0, 2) keep_dims=0 inputs=327680 outputs=512 max_abs=7.15256e-07
+PASS label=S02CA case=inner_5_output_tail dtype=fp16 shape=(40, 101, 64, 5) axes=(0, 2) keep_dims=0 inputs=1292800 outputs=505 max_abs=0
+PASS label=S02CA case=inner_5_output_tail dtype=bf16 shape=(40, 101, 64, 5) axes=(0, 2) keep_dims=0 inputs=1292800 outputs=505 max_abs=0
+PASS label=S02CA case=inner_5_output_tail dtype=fp32 shape=(40, 101, 64, 5) axes=(0, 2) keep_dims=0 inputs=1292800 outputs=505 max_abs=1.90735e-06
+PASS label=S02CA case=inner_15_output_tail dtype=fp16 shape=(40, 34, 32, 15) axes=(0, 2) keep_dims=0 inputs=652800 outputs=510 max_abs=0
+PASS label=S02CA case=inner_15_output_tail dtype=bf16 shape=(40, 34, 32, 15) axes=(0, 2) keep_dims=0 inputs=652800 outputs=510 max_abs=0
+PASS label=S02CA case=inner_15_output_tail dtype=fp32 shape=(40, 34, 32, 15) axes=(0, 2) keep_dims=0 inputs=652800 outputs=510 max_abs=9.53674e-07
+PASS label=S02CA case=inner_16 dtype=fp16 shape=(40, 16, 64, 16) axes=(0, 2) keep_dims=0 inputs=655360 outputs=256 max_abs=0
+PASS label=S02CA case=inner_16 dtype=bf16 shape=(40, 16, 64, 16) axes=(0, 2) keep_dims=0 inputs=655360 outputs=256 max_abs=0
+PASS label=S02CA case=inner_16 dtype=fp32 shape=(40, 16, 64, 16) axes=(0, 2) keep_dims=0 inputs=655360 outputs=256 max_abs=1.90735e-06
+PASS label=S02CA case=rank5_inner_8 dtype=fp16 shape=(64, 16, 32, 2, 4) axes=(0, 2) keep_dims=0 inputs=262144 outputs=128 max_abs=0
+PASS label=S02CA case=rank5_inner_8 dtype=bf16 shape=(64, 16, 32, 2, 4) axes=(0, 2) keep_dims=0 inputs=262144 outputs=128 max_abs=0
+PASS label=S02CA case=rank5_inner_8 dtype=fp32 shape=(64, 16, 32, 2, 4) axes=(0, 2) keep_dims=0 inputs=262144 outputs=128 max_abs=2.86102e-06
+PASS label=S02CA case=rank5_outer_output dtype=fp16 shape=(2, 40, 16, 64, 4) axes=(1, 3) keep_dims=0 inputs=327680 outputs=128 max_abs=0
+PASS label=S02CA case=rank5_outer_output dtype=bf16 shape=(2, 40, 16, 64, 4) axes=(1, 3) keep_dims=0 inputs=327680 outputs=128 max_abs=0
+PASS label=S02CA case=rank5_outer_output dtype=fp32 shape=(2, 40, 16, 64, 4) axes=(1, 3) keep_dims=0 inputs=327680 outputs=128 max_abs=9.53674e-07
+PASS label=S02CA case=negative_axes_keepdims dtype=fp16 shape=(2, 40, 16, 64, 4) axes=(-2, 1) keep_dims=1 inputs=327680 outputs=128 max_abs=0
+PASS label=S02CA case=negative_axes_keepdims dtype=bf16 shape=(2, 40, 16, 64, 4) axes=(-2, 1) keep_dims=1 inputs=327680 outputs=128 max_abs=0
+PASS label=S02CA case=negative_axes_keepdims dtype=fp32 shape=(2, 40, 16, 64, 4) axes=(-2, 1) keep_dims=1 inputs=327680 outputs=128 max_abs=1.90735e-06
+SUMMARY_S02CA_SPLITK label=S02CA passed=36/36
+SUMMARY_S02CA_SPLITK label=S02CA passed=36/36

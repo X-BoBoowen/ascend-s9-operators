@@ -1045,7 +1045,11 @@ RUN SHA-256：
 F5E515F32453292EF2CFD3C636C0203DB045C046BCA01EA546D3BDAEAC9FA0E2
 ```
 
-S02BN 尚无官方结果，不能据公开 A/B 宣称命中隐藏主耗时或达到榜单目标。
+S02BM 官方结果为 `7.660 / 405.020 / 140.068 / 2555.804 /
+904.548 us`，`prof_sum=4013.100 us`；S02BN 官方结果为
+`7.584 / 395.736 / 140.568 / 2550.248 / 906.912 us`，
+`prof_sum=4001.048 us`。相对 S02BA 分别慢 `27.770 us` 和
+`15.718 us`，因此两者均不晋级。
 
 ### 12.15 SquareSumV1-S02BS fastPath4 标量行合并候选
 
@@ -1096,6 +1100,31 @@ RUN SHA-256：
 S02BT 尚无官方结果，不能据公开矩阵宣称命中隐藏主耗时或达到
 `0.30 × T_baseline`。
 
+### 12.17 SquareSumV1-S02CA fastPath4 窄 inner split-K 候选
+
+S02CA 在 S02BT 基础上，只为大规模 fastPath4、`inner=4～16`、
+外层归约组不少于 40、输入不少于 262144 且输出不超过 512 的布局
+启用 40 核 split-K。每核计算全部输出的部分和并写入 FP32 workspace，
+0 号核顺序合并；inner=2 保持 S02BT 原路径。
+
+最终复验为自适应边界 `69/69`、路径矩阵 `33/33`、新增 split-K
+边界 `36/36`。相对 S02BT，inner4/8/16 三种 dtype 合计分别加速
+`1.095x / 1.042x / 2.388x`；33 点矩阵从 `7045.946` 降到
+`6559.652 us`，约 `1.074x`。
+
+```text
+SQUARESUM_S02CA_CLOUD_REPORT_20260806.md
+
+D:\29722\Desktop\GCC\提交相关材料\20260806\S02CA\SquareSumV1.zip
+大小：732774 bytes
+ZIP SHA-256：
+1209A5445514553CC1A0C4D243FB1764DC80A7B66CED427F7DA82699FA10C117
+RUN SHA-256：
+2CC2AFDD04382B5A49CB7B39DE7348F0C1B5CD5FB0BC7C8032FA452625D70CF5
+```
+
+S02CA 尚无官方五 Case 结果；正式目标仍为 `prof_sum <= 1195.599 us`。
+
 ## 13. 安全与仓库卫生
 
 禁止提交：
@@ -1114,10 +1143,9 @@ git ls-files | grep -Ei '\.(pem|key|run|so|whl|zip)$'
 
 ## 14. 结论边界
 
-当前能够确认的是：S02BF、S02BG、S02BI、S02BK 官方均为 `5/5 Pass`，
-但都没有形成相对 S02BA `3985.330 μs` 的有效稳定提升；S02BS 在通用
-fastPath4 标量行矩阵取得热点合计 `47.049x`、规模交叉合计 `15.304x`
-加速并通过 `1613/1613` 门禁，但尚无官方结果。
+当前能够确认的是：S02BF、S02BG、S02BI、S02BK、S02BM、S02BN 官方
+均为 `5/5 Pass`，但都没有形成相对 S02BA `3985.330 μs` 的有效稳定
+提升；S02CA 已通过最终新增/路径复验并完成打包，但尚无官方结果。
 
 当前不能确认的是：隐藏 Case 的具体 shape/dtype/TilingKey。后续优化必须
 继续依据通用布局、公开矩阵和真机 profiling，不得把平台 Case 当作可猜测
