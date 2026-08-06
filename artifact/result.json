@@ -1,9 +1,9 @@
 {
-  "command": "set -e\nrepo=/home/ma-user/work/s9/repository/ascend-s9-operators\ncd \"$repo\"\ngit pull --ff-only origin main\nprintf 'SYNCED_HEAD='\ngit rev-parse --short HEAD\nnohup bash -lc 'sleep 45; cd /home/ma-user/work/s9/repository/ascend-s9-operators; git pull --ff-only origin main > /home/ma-user/work/s9/s02cf_final_sync.log 2>&1; git rev-parse --short HEAD >> /home/ma-user/work/s9/s02cf_final_sync.log' >/dev/null 2>&1 &\necho FINAL_SYNC_SCHEDULED_PID=$!",
+  "command": "set -e; rel=/home/ma-user/work/s9/releases/squaresum_s02cg_20260806_1700; test ! -e $rel; mkdir -p $rel; cp /home/ma-user/work/s9/experiments/squaresum_s02cg_splitk_o64_20260806_1645/SquareSumV1.zip $rel/; cd $rel; unzip -q SquareSumV1.zip; echo ZIP_SHA; sha256sum SquareSumV1.zip; echo RUN_SHA_AND_MODE; sha256sum SquareSumV1_zip/custom_opp_euleros_aarch64.run; stat -c \"%a %n\" SquareSumV1_zip/custom_opp_euleros_aarch64.run; echo SOURCE_HASHES; sha256sum SquareSumV1_zip/op_host/* SquareSumV1_zip/op_kernel/*; echo ENTRY_COUNT; unzip -Z1 SquareSumV1.zip | wc -l",
   "remote": "ma-user@dev-modelarts.cn-southwest-2.huaweicloud.com:32375",
-  "started_at": "2026-08-06T16:38:18.9665590+08:00",
-  "finished_at": "2026-08-06T16:38:25.3586852+08:00",
-  "duration_ms": 6392.126,
+  "started_at": "2026-08-06T16:59:44.8951940+08:00",
+  "finished_at": "2026-08-06T16:59:50.0532648+08:00",
+  "duration_ms": 5158.071,
   "exit_code": 0,
   "success": true,
   "log": "artifact/run.log"

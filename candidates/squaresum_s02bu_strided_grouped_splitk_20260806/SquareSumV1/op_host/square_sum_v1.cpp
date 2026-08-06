@@ -308,7 +308,7 @@ static ge::graphStatus TilingFunc(gert::TilingContext* context)
     constexpr uint64_t NONCONTIGUOUS_SPLITK_MIN_ROWS = 16U;
     constexpr uint64_t NONCONTIGUOUS_SPLITK_MIN_TAIL = 1024U;
     constexpr uint64_t NONCONTIGUOUS_SPLITK_MAX_TAIL = 16384U;
-    constexpr uint64_t NONCONTIGUOUS_SPLITK_MAX_OUTPUTS = 32U;
+    constexpr uint64_t NONCONTIGUOUS_SPLITK_MAX_OUTPUTS = 64U;
     constexpr uint64_t NONCONTIGUOUS_LONG_SPLITK_CHUNK = 4096U;
     constexpr uint64_t NONCONTIGUOUS_LONG_SPLITK_MAX_OUTPUTS = 16U;
     constexpr uint64_t WORKSPACE_LAST_MAX_OUTPUTS = 8;
