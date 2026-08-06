@@ -1,9 +1,9 @@
 {
-  "command": "find /home/ma-user/work/s9/experiments/squaresum_s02cl_fast4_aligned_rows_min16_20260806_1720 -maxdepth 1 -type f -printf '%f\\n' | sort",
+  "command": "set -e\ncd /home/ma-user/work/s9/repository/ascend-s9-operators\ntest \"$(git branch --show-current)\" = main\ngit status --short\ngit pull --ff-only origin main\ntest \"$(git rev-parse HEAD)\" = \"$(git rev-parse origin/main)\"\ngit log -2 --oneline\ngit status --short --branch",
   "remote": "ma-user@dev-modelarts.cn-southwest-2.huaweicloud.com:32375",
-  "started_at": "2026-08-06T17:34:22.3507884+08:00",
-  "finished_at": "2026-08-06T17:34:26.2630001+08:00",
-  "duration_ms": 3912.212,
+  "started_at": "2026-08-06T17:35:42.8416175+08:00",
+  "finished_at": "2026-08-06T17:35:48.6049178+08:00",
+  "duration_ms": 5763.3,
   "exit_code": 0,
   "success": true,
   "log": "artifact/run.log"

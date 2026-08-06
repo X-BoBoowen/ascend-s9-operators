@@ -1,5 +1,12 @@
 
-[2026-08-06 17:34:25 +0800] $ find /home/ma-user/work/s9/experiments/squaresum_s02cl_fast4_aligned_rows_min16_20260806_1720 -maxdepth 1 -type f -printf '%f\n' | sort
+[2026-08-06 17:35:46 +0800] $ set -e
+cd /home/ma-user/work/s9/repository/ascend-s9-operators
+test "$(git branch --show-current)" = main
+git status --short
+git pull --ff-only origin main
+test "$(git rev-parse HEAD)" = "$(git rev-parse origin/main)"
+git log -2 --oneline
+git status --short --branch
 The environment has been set
 The environment has been set
  __  __               _          _                      _
@@ -15,13 +22,42 @@ Tips:
 2) Copy (Ctrl+C) and paste (Ctrl+V) on the jupyter terminal.
 3) Store your data in /home/ma-user/work, to which a persistent volume is mounted.
 4) Exercise caution when using plaintext passwords, hard-coded AK/SK, or directly entering them in the command line.
-build_s02cl.log
-build.sh
-CMakeLists.txt
-CMakePresets.json
-correctness_s02cl.log
-cumulative_correctness_315.log
-large_atlas_s02cl.log
-output_rows_s02cl.log
-path_atlas_s02cl.log
-squaresum_s02cl_aligned_rows_correctness_20260806.py
+?? extra-info/
+?? validation/SquareSumV1/common
+?? validation/SquareSumV1/extra-info/
+?? validation/SquareSumV1/squaresum_contiguous_sweep_20260730.py
+?? validation/SquareSumV1/squaresum_finalizer_sweep_20260730.py
+?? validation/SquareSumV1/squaresum_segmented_probe_20260730.py
+?? validation/SquareSumV1/squaresum_strided_sweep_20260730.py
+?? validation/Transpose/common/
+?? validation/common/
+From https://github.com/X-BoBoowen/ascend-s9-operators
+ * branch            main       -> FETCH_HEAD
+   41ba2e0..e793611  main       -> origin/main
+Updating 41ba2e0..e793611
+Fast-forward
+ README.md                                          |  53 ++++++--
+ SQUARESUM_S02CL_CLOUD_REPORT_20260806.md           | 137 +++++++++++++++++++++
+ artifact/result.json                               |   8 +-
+ artifact/run.log                                   |  28 ++---
+ .../SquareSumV1/op_host/square_sum_v1.cpp          |  14 +++
+ ...quaresum_s02cj_aligned_rows_compare_20260806.py |  83 +++++++++++++
+ .../squaresum_s02ck_output_rows_atlas_20260806.py  | 107 ++++++++++++++++
+ ...esum_s02cl_aligned_rows_correctness_20260806.py |  88 +++++++++++++
+ 8 files changed, 485 insertions(+), 33 deletions(-)
+ create mode 100644 SQUARESUM_S02CL_CLOUD_REPORT_20260806.md
+ create mode 100644 diagnostics/squaresum_s02cj_aligned_rows_compare_20260806.py
+ create mode 100644 diagnostics/squaresum_s02ck_output_rows_atlas_20260806.py
+ create mode 100644 diagnostics/squaresum_s02cl_aligned_rows_correctness_20260806.py
+e793611 align SquareSum fastPath4 work to output rows
+41ba2e0 record S02CG cloud repository sync
+## main...origin/main
+?? extra-info/
+?? validation/SquareSumV1/common
+?? validation/SquareSumV1/extra-info/
+?? validation/SquareSumV1/squaresum_contiguous_sweep_20260730.py
+?? validation/SquareSumV1/squaresum_finalizer_sweep_20260730.py
+?? validation/SquareSumV1/squaresum_segmented_probe_20260730.py
+?? validation/SquareSumV1/squaresum_strided_sweep_20260730.py
+?? validation/Transpose/common/
+?? validation/common/
