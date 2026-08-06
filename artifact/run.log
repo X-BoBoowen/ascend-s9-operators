@@ -1,27 +1,20 @@
 
-[2026-08-06 12:26:00 +0800] $ set -e
-EXP=/home/ma-user/work/s9/experiments/squaresum_s02bm_cloud_20260806_1216
+[2026-08-06 12:53:12 +0800] $ set -e
 REPO=/home/ma-user/work/s9/repository/ascend-s9-operators
+EXP=/home/ma-user/work/s9/experiments/squaresum_s02bn_cloud_20260806_1235
+RELEASE=/home/ma-user/work/s9/releases/squaresum_s02bn_20260806_1252
 cd "$REPO"
 git pull --ff-only origin main
-echo "REPO_SHA=$(git rev-parse HEAD)"
-tail -n 1 "$EXP/full_test_matrix.log"
-tail -n 1 "$EXP/full_cloud_gate.log"
-tail -n 1 "$EXP/full_random_matrix.log"
-tail -n 1 "$EXP/full_bf16_semantic.log"
-tail -n 1 "$EXP/full_extended_matrix.log"
-tail -n 1 "$EXP/middle8_correctness.log"
-tail -n 1 "$EXP/singleton_correctness.log"
-tail -n 1 "$EXP/trailing_singleton_correctness.log"
-tail -n 1 "$EXP/full_crossover.log"
-tail -n 1 "$EXP/full_singleton_gap.log"
-tail -n 1 "$EXP/middle8_performance.log"
-tail -n 1 "$EXP/fp3_sweep_s02bm.log"
-tail -n 1 "$EXP/noncontiguous_s02bm.log"
-tail -n 1 "$EXP/threshold_s02bm.log"
-tail -n 1 "$EXP/crossover_s02bm.log"
-sha256sum "$EXP/build_out/custom_opp_euleros_aarch64.run"
-echo S02BM_FINAL_CLOUD_EVIDENCE_PASS
+for f in \
+ full_test_matrix.log full_cloud_gate.log full_random_matrix.log full_bf16_semantic.log full_extended_matrix.log \
+ middle8_correctness.log singleton_correctness.log trailing_singleton_correctness.log full_crossover.log full_singleton_gap.log middle8_performance.log \
+ fp3_sweep_s02bn.log noncontiguous_s02bn.log threshold_s02bn.log crossover_s02bn.log long_tail_s02bn.log structural_correctness.log; do
+ tail -n 1 "$EXP/$f"
+done
+sha256sum "$EXP/build_out/custom_opp_euleros_aarch64.run" "$RELEASE/SquareSumV1_zip/custom_opp_euleros_aarch64.run"
+printf 'REPO_SHA=' && git rev-parse HEAD
+printf 'RELEASE_FILES=' && find "$RELEASE/SquareSumV1_zip" -type f | wc -l
+echo S02BN_FINAL_CLOUD_EVIDENCE_PASS_TOTAL_1571_OF_1571
 The environment has been set
 The environment has been set
  __  __               _          _                      _
@@ -39,15 +32,11 @@ Tips:
 4) Exercise caution when using plaintext passwords, hard-coded AK/SK, or directly entering them in the command line.
 From https://github.com/X-BoBoowen/ascend-s9-operators
  * branch            main       -> FETCH_HEAD
-   de566c8..5cfc7fe  main       -> origin/main
-Updating de566c8..5cfc7fe
+   1d301e5..ccd4ae9  main       -> origin/main
+Updating 1d301e5..ccd4ae9
 Fast-forward
- README.md                                |  16 +--
- SQUARESUM_S02BK_CLOUD_REPORT_20260806.md |  17 ++++
- SQUARESUM_S02BM_CLOUD_REPORT_20260806.md | 163 +++++++++++++++++++++++++++++++
- 3 files changed, 189 insertions(+), 7 deletions(-)
- create mode 100644 SQUARESUM_S02BM_CLOUD_REPORT_20260806.md
-REPO_SHA=5cfc7fef386fcfacb95f3ae8d3466a98dde037f3
+ SQUARESUM_S02BN_CLOUD_REPORT_20260806.md | 6 ++++++
+ 1 file changed, 6 insertions(+)
 ALL PASS: 46 directed cases
 SUMMARY_CORRECTNESS=45/45
 ALL RANDOM PASS: 150 cases, seed=2026072609
@@ -59,9 +48,14 @@ SUMMARY_TRAILING_SINGLETON_CORRECTNESS=120/120
 SUMMARY_CROSSOVER=30/30
 SUMMARY_SINGLETON_GAP=15/15
 SUMMARY_MIDDLE8_COMPACT=27/27
-SUMMARY label=S02BM passed=39/39
-SUMMARY label=S02BM passed=36/36
-SUMMARY label=S02BM passed=54/54
-SUMMARY label=S02BM passed=48/48
-62b6f78e9592c44f7832bb81063521f292165b00f95432ed7d10f8ace637eddb  /home/ma-user/work/s9/experiments/squaresum_s02bm_cloud_20260806_1216/build_out/custom_opp_euleros_aarch64.run
-S02BM_FINAL_CLOUD_EVIDENCE_PASS
+SUMMARY label=S02BN passed=39/39
+SUMMARY label=S02BN passed=36/36
+SUMMARY label=S02BN passed=54/54
+SUMMARY label=S02BN passed=48/48
+SUMMARY label=S02BN passed=27/27
+SUMMARY_S02BN_STRUCTURAL_CORRECTNESS=72/72
+f5e515f32453292ef2cfd3c636c0203db045c046bca01ea546d3bdaeac9fa0e2  /home/ma-user/work/s9/experiments/squaresum_s02bn_cloud_20260806_1235/build_out/custom_opp_euleros_aarch64.run
+f5e515f32453292ef2cfd3c636c0203db045c046bca01ea546d3bdaeac9fa0e2  /home/ma-user/work/s9/releases/squaresum_s02bn_20260806_1252/SquareSumV1_zip/custom_opp_euleros_aarch64.run
+REPO_SHA=ccd4ae977fe8b5745f64d454be1775357322a7bb
+RELEASE_FILES=6
+S02BN_FINAL_CLOUD_EVIDENCE_PASS_TOTAL_1571_OF_1571
