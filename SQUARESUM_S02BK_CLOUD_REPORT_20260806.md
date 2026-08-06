@@ -137,3 +137,20 @@ ZIP 只有一个顶层 `SquareSumV1_zip/`，其中包含五份 host/kernel 源�
 基线仍为 S02BA `3985.330 us`，目标为 `1195.599 us`。只有官方结果能
 判断小宽度路径是否命中隐藏主耗时；若仍未显著改善，继续基于通用布局
 和真机 profiling 优化其他未覆盖路径，不反推或硬编码隐藏 shape。
+
+## 8. 官方结果与结论（2026-08-06）
+
+```text
+Case1: Pass, Result: 6.570
+Case2: Pass, Result: 389.5275
+Case3: Pass, Result: 138.733
+Case4: Pass, Result: 2554.151
+Case5: Pass, Result: 895.818
+prof_sum: 3984.7995
+```
+
+相对 S02BA `3985.330 us`，S02BK 合计只改善 `0.5305 us（0.013%）`；
+五项变化为 `+0.060 / -9.5605 / -0.020 / +3.390 / +5.600 us`。
+Case4/5 退化，合计差异远小于同包复测波动，因此 S02BK 判定未晋级。
+这说明“已经满足旧 workspace 门槛的 fastPath2 小 inner”没有命中隐藏
+主耗时。后继 S02BM 转而修复 S02BK 未覆盖的门槛以下单核性能断崖。
