@@ -262,6 +262,22 @@
       "axes": [3, 2],
       "keep_dims": false,
       "tier": "last_output_splitk"
+    },
+    {
+      "name": "s03d_singleton_gap_fast1",
+      "route": "fast1",
+      "shape": [128, 1, 64],
+      "axes": [0, 2],
+      "keep_dims": false,
+      "tier": "singleton_gap_s03d"
+    },
+    {
+      "name": "s03d_singleton_gap_fast2",
+      "route": "fast2",
+      "shape": [128, 1, 64, 64],
+      "axes": [2, 0],
+      "keep_dims": true,
+      "tier": "singleton_gap_s03d"
     }
   ]
 }
