@@ -1,16 +1,12 @@
 
-[2026-08-06 16:37:29 +0800] $ set -e
-exp=/home/ma-user/work/s9/experiments/squaresum_s02cf_large_power2_splitk_20260806_1620
-rel=/home/ma-user/work/s9/releases/squaresum_s02cf_20260806_1635
-printf 'S02CD_OFFICIAL=6.390,397.4975,139.603,2556.431,894.4275 SUM=3994.349\n'
-grep -E 'SUMMARY' "$exp/regression231_s02cf.log"
-tail -1 "$exp/large_scale_atlas_s02cf.log"
-tail -1 "$exp/path_atlas_s02cf.log"
-printf 'LARGE_ATLAS_CE_SUM=27307.280 MAX=11950.520\n'
-printf 'LARGE_ATLAS_CF_SUM=7228.150 MAX=813.140\n'
-sha256sum "$rel/SquareSumV1.zip" "$rel/SquareSumV1_zip/custom_opp_euleros_aarch64.run"
-printf 'CLOUD_REPO_HEAD='
-git -C /home/ma-user/work/s9/repository/ascend-s9-operators rev-parse --short HEAD
+[2026-08-06 16:38:23 +0800] $ set -e
+repo=/home/ma-user/work/s9/repository/ascend-s9-operators
+cd "$repo"
+git pull --ff-only origin main
+printf 'SYNCED_HEAD='
+git rev-parse --short HEAD
+nohup bash -lc 'sleep 45; cd /home/ma-user/work/s9/repository/ascend-s9-operators; git pull --ff-only origin main > /home/ma-user/work/s9/s02cf_final_sync.log 2>&1; git rev-parse --short HEAD >> /home/ma-user/work/s9/s02cf_final_sync.log' >/dev/null 2>&1 &
+echo FINAL_SYNC_SCHEDULED_PID=$!
 The environment has been set
 The environment has been set
  __  __               _          _                      _
@@ -26,16 +22,23 @@ Tips:
 2) Copy (Ctrl+C) and paste (Ctrl+V) on the jupyter terminal.
 3) Store your data in /home/ma-user/work, to which a persistent volume is mounted.
 4) Exercise caution when using plaintext passwords, hard-coded AK/SK, or directly entering them in the command line.
-S02CD_OFFICIAL=6.390,397.4975,139.603,2556.431,894.4275 SUM=3994.349
-SUMMARY_S02BT_ADAPTIVE_GROUPED label=S02CF passed=69/69
-SUMMARY_S02CA_SPLITK label=S02CF passed=36/36
-SUMMARY_S02CB_INNER2 label=S02CF passed=42/42
-SUMMARY_S02CE_O32 label=S02CF passed=42/42
-SUMMARY_S02CF_LARGE_POWER2 label=S02CF passed=42/42
-LARGE_ATLAS_SUMMARY label=S02CF passed=26/26
-ATLAS_SUMMARY label=S02CF passed=42/42
-LARGE_ATLAS_CE_SUM=27307.280 MAX=11950.520
-LARGE_ATLAS_CF_SUM=7228.150 MAX=813.140
-26693f15a8d7434d840018e948f66cd21e13bcbcf59f9a46617251407e09efc3  /home/ma-user/work/s9/releases/squaresum_s02cf_20260806_1635/SquareSumV1.zip
-cad65a62ca89ae93fb6a237f5161ec322a2a407ecefe0f47f2f695774ddc729f  /home/ma-user/work/s9/releases/squaresum_s02cf_20260806_1635/SquareSumV1_zip/custom_opp_euleros_aarch64.run
-CLOUD_REPO_HEAD=68f24b1
+From https://github.com/X-BoBoowen/ascend-s9-operators
+ * branch            main       -> FETCH_HEAD
+   68f24b1..ad4cf44  main       -> origin/main
+Updating 68f24b1..ad4cf44
+Fast-forward
+ README.md                                          |  40 ++++++-
+ SQUARESUM_S02CF_CLOUD_REPORT_20260806.md           | 120 +++++++++++++++++++++
+ artifact/result.json                               |   8 +-
+ artifact/run.log                                   |  50 ++++-----
+ .../SquareSumV1/op_host/square_sum_v1.cpp          | 110 ++++++++++++++-----
+ .../SquareSumV1/op_kernel/CMakeLists.txt           |   2 +-
+ .../SquareSumV1/op_kernel/square_sum_v1.cpp        |  22 +++-
+ .../squaresum_large_scale_atlas_20260806.py        | 107 ++++++++++++++++++
+ ...esum_s02cf_large_power2_correctness_20260806.py |  98 +++++++++++++++++
+ 9 files changed, 496 insertions(+), 61 deletions(-)
+ create mode 100644 SQUARESUM_S02CF_CLOUD_REPORT_20260806.md
+ create mode 100644 diagnostics/squaresum_large_scale_atlas_20260806.py
+ create mode 100644 diagnostics/squaresum_s02cf_large_power2_correctness_20260806.py
+SYNCED_HEAD=ad4cf44
+FINAL_SYNC_SCHEDULED_PID=555830
