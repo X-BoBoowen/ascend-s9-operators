@@ -1,6 +1,7 @@
 import argparse
 import csv
 import json
+import os
 import statistics
 from collections import Counter
 from pathlib import Path
@@ -36,6 +37,7 @@ def main():
     parser.add_argument("--case", required=True)
     parser.add_argument("--dtype", required=True)
     parser.add_argument("--require-mul-count", type=int, default=None)
+    parser.add_argument("--result-json", type=Path, default=None)
     args = parser.parse_args()
 
     files, durations, skipped_mul, names = read_rows(args.profile_root.resolve())
@@ -67,6 +69,15 @@ def main():
         "non_mul_operator_counts": dict(sorted(names.items())),
         "source_files": [str(path) for path in files],
     }
+    if args.result_json is not None:
+        destination = args.result_json.resolve()
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        temporary = destination.with_name(destination.name + ".tmp")
+        temporary.write_text(
+            json.dumps(result, ensure_ascii=False, indent=2) + "\n",
+            encoding="utf-8",
+        )
+        os.replace(temporary, destination)
     print("OFFICIAL_PROFILE_RESULT " + json.dumps(result, ensure_ascii=False))
 
 

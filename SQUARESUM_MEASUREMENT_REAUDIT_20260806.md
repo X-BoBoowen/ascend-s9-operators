@@ -55,6 +55,17 @@ S02CN 的正式结果为 `4010.864 us`，相对 S02BA 基线 `3985.330 us`
   任务名称计数，防止把错误任务当作算子耗时。
 - `diagnostics/run_squaresum_official_profile_20260806.sh`：单用例入口。它要求
   profiler 中恰好发现 30 个 `aclnnMul`，否则判定任务流不等价并失败。
+- `diagnostics/run_squaresum_official_matrix_20260806.sh`：依次运行指定 dtype
+  和 tier 的全部题面域用例，每个用例使用独立 msprof 目录。
+- `diagnostics/compare_squaresum_official_matrices_20260806.py`：比较完整的
+  Baseline-Candidate-Baseline 三组矩阵；默认要求基线漂移不超过 3%、任一
+  用例回退不超过 3%、矩阵总耗时至少改善 5%。
+- `diagnostics/squaresum_domain_event_atlas_20260806.py`：只用于快速发现
+  题面域内的毫秒级结构瓶颈。它覆盖不同输出规模、inner、rank 和非连续
+  axis；发现的热点必须再经过 msprof，Event 数值不能直接作为提交依据。
+
+profiler 使用 CANN 8.5 官方支持的 `msprof --output=<dir>` 参数，将每个用例
+隔离到 `artifact/` 下的固定目录，不再清理调用目录中的宽泛 `PROF*`。
 
 本地静态验证命令：
 
@@ -62,12 +73,36 @@ S02CN 的正式结果为 `4010.864 us`，相对 S02BA 基线 `3985.330 us`
 python3 diagnostics/validate_squaresum_profile_matrix_20260806.py
 ```
 
+当前矩阵共 23 个 shape，全部通过题面范围与 host 路由复算；其中 core 7 个、
+atlas 12 个、extended 3 个、公开 smoke 1 个。
+
 云端单用例命令示例：
 
 ```bash
 bash diagnostics/run_squaresum_official_profile_20260806.sh \
   fast2_middle_aligned bf16 S02CA
 ```
+
+单次 SSH 会话内完成三组 BF16 core 矩阵后，使用以下命令判定：
+
+```bash
+bash diagnostics/run_squaresum_official_matrix_20260806.sh \
+  bf16 S02CA_A aba_s02ca_a core
+bash diagnostics/run_squaresum_official_matrix_20260806.sh \
+  bf16 S02CQ aba_s02cq core
+bash diagnostics/run_squaresum_official_matrix_20260806.sh \
+  bf16 S02CA_B aba_s02ca_b core
+
+python3 diagnostics/compare_squaresum_official_matrices_20260806.py \
+  --baseline-a artifact/aba_s02ca_a \
+  --candidate artifact/aba_s02cq \
+  --baseline-b artifact/aba_s02ca_b \
+  --output artifact/SquareSumV1/summary.json
+```
+
+三次矩阵之间必须分别安装对应的 S02CA、S02CQ、S02CA `.run`；必须放在
+同一个 `ssh_visible.ps1` 远端命令中执行，避免下一次服务器运行清空
+`artifact/` 后丢失前一组数据。
 
 ## 下次云端执行顺序
 

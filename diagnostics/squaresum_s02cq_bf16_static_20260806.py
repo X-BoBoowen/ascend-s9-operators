@@ -13,6 +13,9 @@ CANDIDATE = (
 EXPECTED_HOST_SHA256 = (
     "0B5C6AEE3B01A63192A6CD4A59CF77A19373B6423274DC73968BAA77D84E9203"
 )
+EXPECTED_KERNEL_SHA256 = (
+    "5E7160EC078FB1DF96F37E8FA3762FD692862D413BF872F12C0BA57E7F8D80FD"
+)
 
 
 def sha256(path):
@@ -28,6 +31,12 @@ def main():
     if actual_host_hash != EXPECTED_HOST_SHA256:
         raise AssertionError(
             f"host changed: expected {EXPECTED_HOST_SHA256}, got {actual_host_hash}"
+        )
+    actual_kernel_hash = sha256(kernel)
+    if actual_kernel_hash != EXPECTED_KERNEL_SHA256:
+        raise AssertionError(
+            f"kernel changed: expected {EXPECTED_KERNEL_SHA256}, "
+            f"got {actual_kernel_hash}"
         )
 
     intermediate_roundtrip = re.compile(
@@ -54,7 +63,7 @@ def main():
     print(
         "S02CQ_STATIC "
         f"host_sha256={actual_host_hash} "
-        f"kernel_sha256={sha256(kernel)} "
+        f"kernel_sha256={actual_kernel_hash} "
         f"intermediate_roundtrips=0 final_cast_rint={final_rounds} PASS"
     )
 

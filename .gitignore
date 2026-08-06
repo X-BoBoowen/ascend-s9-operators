@@ -40,6 +40,13 @@ checkpoints/
 !/artifact/*/op_summary.csv
 !/artifact/*/summary.json
 
+# Matrix profiling keeps its latest raw msprof tree and per-case JSON below
+# artifact/ for local inspection. These files can be very large and are
+# reproducible; the aggregate summary remains the reviewable artifact.
+/artifact/**/msprof/
+/artifact/**/result.json
+!/artifact/result.json
+
 # Local configuration and credentials
 .env
 .env.*
