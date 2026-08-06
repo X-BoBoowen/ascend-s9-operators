@@ -1,9 +1,9 @@
 {
-  "command": "release=/home/ma-user/work/s9/releases/squaresum_s02cm_20260806_1825; mkdir \"$release/extracted_final\" && unzip -q \"$release/SquareSumV1.zip\" -d \"$release/extracted_final\" && cd \"$release\" && sha256sum SquareSumV1.zip extracted_final/SquareSumV1_zip/custom_opp_euleros_aarch64.run extracted_final/SquareSumV1_zip/op_host/square_sum_v1.cpp extracted_final/SquareSumV1_zip/op_kernel/square_sum_v1.cpp && echo ENTRIES=$(unzip -Z1 SquareSumV1.zip | wc -l) && find extracted_final/SquareSumV1_zip -maxdepth 2 -printf \"%m %P\\n\" | sort",
+  "command": "cd /home/ma-user/work/s9/repository/ascend-s9-operators && rm -f -- diagnostics/squaresum_s02cm_inner_sweep_20260806.py && git pull --ff-only origin main && git rev-parse --short HEAD && git status --short | head -n 20",
   "remote": "ma-user@dev-modelarts.cn-southwest-2.huaweicloud.com:32375",
-  "started_at": "2026-08-06T18:36:29.3353983+08:00",
-  "finished_at": "2026-08-06T18:36:33.9338849+08:00",
-  "duration_ms": 4598.487,
+  "started_at": "2026-08-06T18:37:29.1782489+08:00",
+  "finished_at": "2026-08-06T18:37:36.4067159+08:00",
+  "duration_ms": 7228.467,
   "exit_code": 0,
   "success": true,
   "log": "artifact/run.log"

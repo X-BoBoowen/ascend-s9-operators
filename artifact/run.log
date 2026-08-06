@@ -1,5 +1,5 @@
 
-[2026-08-06 18:36:33 +0800] $ release=/home/ma-user/work/s9/releases/squaresum_s02cm_20260806_1825; mkdir "$release/extracted_final" && unzip -q "$release/SquareSumV1.zip" -d "$release/extracted_final" && cd "$release" && sha256sum SquareSumV1.zip extracted_final/SquareSumV1_zip/custom_opp_euleros_aarch64.run extracted_final/SquareSumV1_zip/op_host/square_sum_v1.cpp extracted_final/SquareSumV1_zip/op_kernel/square_sum_v1.cpp && echo ENTRIES=$(unzip -Z1 SquareSumV1.zip | wc -l) && find extracted_final/SquareSumV1_zip -maxdepth 2 -printf "%m %P\n" | sort
+[2026-08-06 18:37:34 +0800] $ cd /home/ma-user/work/s9/repository/ascend-s9-operators && rm -f -- diagnostics/squaresum_s02cm_inner_sweep_20260806.py && git pull --ff-only origin main && git rev-parse --short HEAD && git status --short | head -n 20
 The environment has been set
 The environment has been set
  __  __               _          _                      _
@@ -15,17 +15,28 @@ Tips:
 2) Copy (Ctrl+C) and paste (Ctrl+V) on the jupyter terminal.
 3) Store your data in /home/ma-user/work, to which a persistent volume is mounted.
 4) Exercise caution when using plaintext passwords, hard-coded AK/SK, or directly entering them in the command line.
-15cb455648368c37098c871790488497dae433d1d4fe941b16615bb65117d1e0  SquareSumV1.zip
-e58c9fc7ea08c73e81f50c902c7074aefd9e74d9641e82f5764776f6e7e151b3  extracted_final/SquareSumV1_zip/custom_opp_euleros_aarch64.run
-71cc81d8e26dc54a56683a79d2e664a4e23f2eff2b6ef2a3ab38f62056f49ab9  extracted_final/SquareSumV1_zip/op_host/square_sum_v1.cpp
-fbf2fe49a1c9cc84d554475c2831d2ee67abfe3182c9404f481aead633f4be4b  extracted_final/SquareSumV1_zip/op_kernel/square_sum_v1.cpp
-ENTRIES=9
-640 op_host/CMakeLists.txt
-640 op_host/square_sum_v1.cpp
-640 op_host/square_sum_v1_tiling.h
-640 op_kernel/CMakeLists.txt
-640 op_kernel/square_sum_v1.cpp
-750
-750 op_host
-750 op_kernel
-755 custom_opp_euleros_aarch64.run
+From https://github.com/X-BoBoowen/ascend-s9-operators
+ * branch            main       -> FETCH_HEAD
+   ef72a52..8844d57  main       -> origin/main
+Updating ef72a52..8844d57
+Fast-forward
+ README.md                                          |  43 +++-
+ SQUARESUM_S02CM_CLOUD_REPORT_20260806.md           | 149 +++++++++++
+ artifact/result.json                               |   8 +-
+ artifact/run.log                                   |  62 ++---
+ .../SquareSumV1/op_host/square_sum_v1.cpp          |   6 +-
+ .../SquareSumV1/op_kernel/square_sum_v1.cpp        | 274 ++++++++++++++++-----
+ .../squaresum_s02cm_inner_sweep_20260806.py        |  80 ++++++
+ 7 files changed, 503 insertions(+), 119 deletions(-)
+ create mode 100644 SQUARESUM_S02CM_CLOUD_REPORT_20260806.md
+ create mode 100644 diagnostics/squaresum_s02cm_inner_sweep_20260806.py
+8844d57
+?? extra-info/
+?? validation/SquareSumV1/common
+?? validation/SquareSumV1/extra-info/
+?? validation/SquareSumV1/squaresum_contiguous_sweep_20260730.py
+?? validation/SquareSumV1/squaresum_finalizer_sweep_20260730.py
+?? validation/SquareSumV1/squaresum_segmented_probe_20260730.py
+?? validation/SquareSumV1/squaresum_strided_sweep_20260730.py
+?? validation/Transpose/common/
+?? validation/common/
