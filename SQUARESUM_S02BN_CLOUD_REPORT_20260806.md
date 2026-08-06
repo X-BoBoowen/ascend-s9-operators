@@ -97,6 +97,12 @@ S02BN 结构正确性专项                72/72
 /home/ma-user/work/s9/experiments/squaresum_s02bn_cloud_20260806_1235
 ```
 
+云端发布快照：
+
+```text
+/home/ma-user/work/s9/releases/squaresum_s02bn_20260806_1252
+```
+
 实际安装并完成门禁的 RUN SHA-256：
 
 ```text
