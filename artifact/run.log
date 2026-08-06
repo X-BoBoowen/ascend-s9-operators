@@ -1,5 +1,5 @@
 
-[2026-08-06 17:00:53 +0800] $ set -e; cd /home/ma-user/work/s9/repository/ascend-s9-operators; git pull --ff-only origin main; printf "CLOUD_HEAD="; git rev-parse --short HEAD; printf "LOCAL_ROUTE="; grep -m1 NONCONTIGUOUS_SPLITK_MAX_OUTPUTS candidates/squaresum_s02bu_strided_grouped_splitk_20260806/SquareSumV1/op_host/square_sum_v1.cpp
+[2026-08-06 17:34:25 +0800] $ find /home/ma-user/work/s9/experiments/squaresum_s02cl_fast4_aligned_rows_min16_20260806_1720 -maxdepth 1 -type f -printf '%f\n' | sort
 The environment has been set
 The environment has been set
  __  __               _          _                      _
@@ -15,19 +15,13 @@ Tips:
 2) Copy (Ctrl+C) and paste (Ctrl+V) on the jupyter terminal.
 3) Store your data in /home/ma-user/work, to which a persistent volume is mounted.
 4) Exercise caution when using plaintext passwords, hard-coded AK/SK, or directly entering them in the command line.
-From https://github.com/X-BoBoowen/ascend-s9-operators
- * branch            main       -> FETCH_HEAD
-   f7582cd..712358f  main       -> origin/main
-Updating f7582cd..712358f
-Fast-forward
- README.md                                          |  37 ++++++-
- SQUARESUM_S02CG_CLOUD_REPORT_20260806.md           | 119 +++++++++++++++++++++
- artifact/result.json                               |   8 +-
- artifact/run.log                                   |  42 +++-----
- .../SquareSumV1/op_host/square_sum_v1.cpp          |   2 +-
- ...s02cg_noncontiguous_o64_correctness_20260806.py |  95 ++++++++++++++++
- 6 files changed, 268 insertions(+), 35 deletions(-)
- create mode 100644 SQUARESUM_S02CG_CLOUD_REPORT_20260806.md
- create mode 100644 diagnostics/squaresum_s02cg_noncontiguous_o64_correctness_20260806.py
-CLOUD_HEAD=712358f
-LOCAL_ROUTE=    constexpr uint64_t NONCONTIGUOUS_SPLITK_MAX_OUTPUTS = 64U;
+build_s02cl.log
+build.sh
+CMakeLists.txt
+CMakePresets.json
+correctness_s02cl.log
+cumulative_correctness_315.log
+large_atlas_s02cl.log
+output_rows_s02cl.log
+path_atlas_s02cl.log
+squaresum_s02cl_aligned_rows_correctness_20260806.py

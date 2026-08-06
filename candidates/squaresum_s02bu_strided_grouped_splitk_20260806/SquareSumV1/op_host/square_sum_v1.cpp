@@ -1194,6 +1194,20 @@ static ge::graphStatus TilingFunc(gert::TilingContext* context)
                 ? vectorTasks
                 : MAX_BLOCK_DIM;
     } else if (
+        fastPath == 4U &&
+        innerElements > 16U &&
+        inputElements >= FULL_CORE_INPUT_THRESHOLD &&
+        outputElements % innerElements == 0U &&
+        outputElements / innerElements >= 16U &&
+        outputElements / innerElements <= MAX_BLOCK_DIM) {
+        const uint64_t outputRows =
+            outputElements / innerElements;
+        desiredBlocks =
+            inputTypeBytes < sizeof(float) ||
+                    innerElements % elementsPerBlock == 0U
+                ? outputRows
+                : MAX_BLOCK_DIM;
+    } else if (
         fastPath == 1 ||
         fastPath == 3 ||
         (fastPath == 4 &&
