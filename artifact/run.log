@@ -1,13 +1,12 @@
 
-[2026-08-06 16:13:28 +0800] $ set -e
-exp=/home/ma-user/work/s9/experiments/squaresum_s02ce_splitk_o32_20260806_1600
-rel=/home/ma-user/work/s9/releases/squaresum_s02ce_20260806_1610
-printf 'S02CD_OFFICIAL=6.390,397.4975,139.603,2556.431,894.4275 SUM=3994.349\n'
-grep -E 'SUMMARY' "$exp/o32_boundary_s02ce.log" "$exp/regression147_s02ce.log"
-tail -1 "$exp/path_atlas_s02ce.log"
-sha256sum "$rel/SquareSumV1.zip" "$rel/SquareSumV1_zip/custom_opp_euleros_aarch64.run"
-printf 'CLOUD_REPO_HEAD='
-git -C /home/ma-user/work/s9/repository/ascend-s9-operators rev-parse --short HEAD
+[2026-08-06 16:14:13 +0800] $ set -e
+repo=/home/ma-user/work/s9/repository/ascend-s9-operators
+cd "$repo"
+git pull --ff-only origin main
+printf 'SYNCED_HEAD='
+git rev-parse --short HEAD
+nohup bash -lc 'sleep 45; cd /home/ma-user/work/s9/repository/ascend-s9-operators; git pull --ff-only origin main > /home/ma-user/work/s9/s02ce_final_sync.log 2>&1; git rev-parse --short HEAD >> /home/ma-user/work/s9/s02ce_final_sync.log' >/dev/null 2>&1 &
+echo FINAL_SYNC_SCHEDULED_PID=$!
 The environment has been set
 The environment has been set
  __  __               _          _                      _
@@ -23,12 +22,20 @@ Tips:
 2) Copy (Ctrl+C) and paste (Ctrl+V) on the jupyter terminal.
 3) Store your data in /home/ma-user/work, to which a persistent volume is mounted.
 4) Exercise caution when using plaintext passwords, hard-coded AK/SK, or directly entering them in the command line.
-S02CD_OFFICIAL=6.390,397.4975,139.603,2556.431,894.4275 SUM=3994.349
-/home/ma-user/work/s9/experiments/squaresum_s02ce_splitk_o32_20260806_1600/o32_boundary_s02ce.log:SUMMARY_S02CE_O32 label=S02CE passed=42/42
-/home/ma-user/work/s9/experiments/squaresum_s02ce_splitk_o32_20260806_1600/regression147_s02ce.log:SUMMARY_S02BT_ADAPTIVE_GROUPED label=S02CE passed=69/69
-/home/ma-user/work/s9/experiments/squaresum_s02ce_splitk_o32_20260806_1600/regression147_s02ce.log:SUMMARY_S02CA_SPLITK label=S02CE passed=36/36
-/home/ma-user/work/s9/experiments/squaresum_s02ce_splitk_o32_20260806_1600/regression147_s02ce.log:SUMMARY_S02CB_INNER2 label=S02CE passed=42/42
-ATLAS_SUMMARY label=S02CE passed=42/42
-bbe62860c2db8891f5a6699feff649c46cebf9d935bd23d2c81633b4c3eb1d70  /home/ma-user/work/s9/releases/squaresum_s02ce_20260806_1610/SquareSumV1.zip
-fe7daab7da5d4162aba12f613b412d6bf8d263827eb95316d769889ba9c66b35  /home/ma-user/work/s9/releases/squaresum_s02ce_20260806_1610/SquareSumV1_zip/custom_opp_euleros_aarch64.run
-CLOUD_REPO_HEAD=9cc2f6e
+From https://github.com/X-BoBoowen/ascend-s9-operators
+ * branch            main       -> FETCH_HEAD
+   9cc2f6e..25c4a85  main       -> origin/main
+Updating 9cc2f6e..25c4a85
+Fast-forward
+ README.md                                          |  43 ++++++++-
+ SQUARESUM_S02CD_CLOUD_REPORT_20260806.md           |  13 ++-
+ SQUARESUM_S02CE_CLOUD_REPORT_20260806.md           | 107 +++++++++++++++++++++
+ artifact/result.json                               |   8 +-
+ artifact/run.log                                   |  45 ++++-----
+ .../SquareSumV1/op_host/square_sum_v1.cpp          |   2 +-
+ ...s02ce_noncontiguous_o32_correctness_20260806.py |  98 +++++++++++++++++++
+ 7 files changed, 274 insertions(+), 42 deletions(-)
+ create mode 100644 SQUARESUM_S02CE_CLOUD_REPORT_20260806.md
+ create mode 100644 diagnostics/squaresum_s02ce_noncontiguous_o32_correctness_20260806.py
+SYNCED_HEAD=25c4a85
+FINAL_SYNC_SCHEDULED_PID=508483

@@ -1,9 +1,9 @@
 {
-  "command": "set -e\nexp=/home/ma-user/work/s9/experiments/squaresum_s02ce_splitk_o32_20260806_1600\nrel=/home/ma-user/work/s9/releases/squaresum_s02ce_20260806_1610\nprintf 'S02CD_OFFICIAL=6.390,397.4975,139.603,2556.431,894.4275 SUM=3994.349\\n'\ngrep -E 'SUMMARY' \"$exp/o32_boundary_s02ce.log\" \"$exp/regression147_s02ce.log\"\ntail -1 \"$exp/path_atlas_s02ce.log\"\nsha256sum \"$rel/SquareSumV1.zip\" \"$rel/SquareSumV1_zip/custom_opp_euleros_aarch64.run\"\nprintf 'CLOUD_REPO_HEAD='\ngit -C /home/ma-user/work/s9/repository/ascend-s9-operators rev-parse --short HEAD",
+  "command": "set -e\nrepo=/home/ma-user/work/s9/repository/ascend-s9-operators\ncd \"$repo\"\ngit pull --ff-only origin main\nprintf 'SYNCED_HEAD='\ngit rev-parse --short HEAD\nnohup bash -lc 'sleep 45; cd /home/ma-user/work/s9/repository/ascend-s9-operators; git pull --ff-only origin main > /home/ma-user/work/s9/s02ce_final_sync.log 2>&1; git rev-parse --short HEAD >> /home/ma-user/work/s9/s02ce_final_sync.log' >/dev/null 2>&1 &\necho FINAL_SYNC_SCHEDULED_PID=$!",
   "remote": "ma-user@dev-modelarts.cn-southwest-2.huaweicloud.com:32375",
-  "started_at": "2026-08-06T16:13:19.5842367+08:00",
-  "finished_at": "2026-08-06T16:13:29.7518063+08:00",
-  "duration_ms": 10167.57,
+  "started_at": "2026-08-06T16:14:09.5863289+08:00",
+  "finished_at": "2026-08-06T16:14:14.9310689+08:00",
+  "duration_ms": 5344.74,
   "exit_code": 0,
   "success": true,
   "log": "artifact/run.log"
