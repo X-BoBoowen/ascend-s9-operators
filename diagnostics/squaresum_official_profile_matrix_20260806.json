@@ -230,6 +230,38 @@
       "axes": [3, 1, 0],
       "keep_dims": false,
       "tier": "short_tail_splitk"
+    },
+    {
+      "name": "short_tail_splitk_output16",
+      "route": "fast3",
+      "shape": [80, 16, 512],
+      "axes": [0, 2],
+      "keep_dims": true,
+      "tier": "short_tail_splitk"
+    },
+    {
+      "name": "last_output_splitk_9",
+      "route": "fast1",
+      "shape": [9, 64, 512],
+      "axes": [1, 2],
+      "keep_dims": false,
+      "tier": "last_output_splitk"
+    },
+    {
+      "name": "last_output_splitk_16",
+      "route": "fast1",
+      "shape": [16, 64, 512],
+      "axes": [-2, -1],
+      "keep_dims": true,
+      "tier": "last_output_splitk"
+    },
+    {
+      "name": "last_output_splitk_rank4",
+      "route": "fast1",
+      "shape": [4, 4, 1000, 32],
+      "axes": [3, 2],
+      "keep_dims": false,
+      "tier": "last_output_splitk"
     }
   ]
 }

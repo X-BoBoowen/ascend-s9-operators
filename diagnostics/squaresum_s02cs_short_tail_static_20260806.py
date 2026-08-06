@@ -35,7 +35,7 @@ MIN_INPUT = 1 << 18
 MIN_REDUCE = 1 << 15
 MIN_ROWS = 40
 MAX_TAIL = 1023
-MAX_OUTPUTS = 8
+MAX_OUTPUTS = 16
 BLOCKS = 40
 
 
@@ -66,7 +66,7 @@ def metadata(shape, axes):
 
 
 def selected(info):
-    return (
+    base_gate = (
         info["route"] == "fast3"
         and info["input"] >= MIN_INPUT
         and info["reduce"] >= MIN_REDUCE
@@ -74,6 +74,10 @@ def selected(info):
         and 0 < info["tail"] <= MAX_TAIL
         and info["rows"] >= MIN_ROWS
     )
+    if not base_gate:
+        return False
+    splitk_cost = info["output"] * math.ceil(info["rows"] / BLOCKS)
+    return info["rows"] >= 2 * splitk_cost
 
 
 def modeled_critical_ratio(info):
@@ -106,8 +110,9 @@ def source_contract():
     host = (CANDIDATE / HOST).read_text(encoding="utf-8")
     assert host.count("noncontiguousShortTailSplitK") == 2
     assert "NONCONTIGUOUS_SHORT_SPLITK_MIN_ROWS = 40U" in host
-    assert "NONCONTIGUOUS_SHORT_SPLITK_MAX_OUTPUTS = 8U" in host
+    assert "NONCONTIGUOUS_SHORT_SPLITK_MAX_OUTPUTS = 16U" in host
     assert "trailingReduceElements < NONCONTIGUOUS_SPLITK_MIN_TAIL" in host
+    assert "splitKNaturalRows >= doubledShortTailSplitKCost" in host
     assert "reduceMode = 3U;" in host
     assert "useTreeFinalize = true;" in host
     for forbidden in ("Case1", "Case2", "Case3", "Case4", "Case5"):
@@ -122,11 +127,14 @@ def main():
         ("tail200_negative", (200, 8, 200), (0, -1)),
         ("tail1_rank4", (200, 200, 8, 1), (0, 1, 3)),
         ("keepdims_shape", (64, 4, 2, 512), (0, 3)),
+        ("output9", (80, 9, 512), (0, 2)),
+        ("output16", (80, 16, 512), (0, 2)),
     )
     controls = (
         ("old_tail1024", (40, 8, 1024), (0, 2)),
         ("rows39", (39, 8, 1023), (0, 2)),
-        ("output9", (40, 9, 1023), (0, 2)),
+        ("output17", (80, 17, 512), (0, 2)),
+        ("rounding_cost", (41, 16, 1023), (0, 2)),
         ("below_reduce", (40, 8, 512), (0, 2)),
         ("contiguous_fast1", (4, 8192), (1,)),
         ("strided_fast4", (40, 2, 512, 4), (0, 2)),
@@ -137,7 +145,7 @@ def main():
         info = metadata(shape, axes)
         assert selected(info), (name, info)
         ratio = modeled_critical_ratio(info)
-        assert ratio >= 4.0, (name, info, ratio)
+        assert ratio >= 2.0, (name, info, ratio)
         print(
             f"S02CS_ROUTE name={name} selected=1 {info} "
             f"modeled_critical_ratio={ratio:.3f} PASS"

@@ -309,11 +309,9 @@ static ge::graphStatus TilingFunc(gert::TilingContext* context)
     constexpr uint64_t NONCONTIGUOUS_SPLITK_MIN_TAIL = 1024U;
     constexpr uint64_t NONCONTIGUOUS_SPLITK_MAX_TAIL = 16384U;
     constexpr uint64_t NONCONTIGUOUS_SPLITK_MAX_OUTPUTS = 8U;
-    constexpr uint64_t NONCONTIGUOUS_SHORT_SPLITK_MIN_ROWS = 40U;
-    constexpr uint64_t NONCONTIGUOUS_SHORT_SPLITK_MAX_OUTPUTS = 16U;
     constexpr uint64_t NONCONTIGUOUS_LONG_SPLITK_CHUNK = 4096U;
     constexpr uint64_t NONCONTIGUOUS_LONG_SPLITK_MAX_OUTPUTS = 16U;
-    constexpr uint64_t WORKSPACE_LAST_MAX_OUTPUTS = 8;
+    constexpr uint64_t WORKSPACE_LAST_MAX_OUTPUTS = 16;
     constexpr uint64_t WORKSPACE_MIDDLE_MAX_OUTPUTS = 1024;
     constexpr uint64_t LONG_CONTIGUOUS_THRESHOLD = 8192;
     constexpr uint64_t TREE_LAST_REDUCE_THRESHOLD =
@@ -576,47 +574,6 @@ static ge::graphStatus TilingFunc(gert::TilingContext* context)
     }
     uint64_t splitKNaturalRows = 0U;
     uint64_t splitKSourceGapBytes = 0U;
-    uint64_t shortTailSplitKCost = 0U;
-    uint64_t doubledShortTailSplitKCost = 0U;
-    const bool noncontiguousShortTailSplitK =
-        fastPath == 3U &&
-        inputElements >= WORKSPACE_REDUCE_INPUT_THRESHOLD &&
-        reduceElements >= NONCONTIGUOUS_SPLITK_MIN_REDUCE &&
-        outputElements > 0U &&
-        outputElements <= NONCONTIGUOUS_SHORT_SPLITK_MAX_OUTPUTS &&
-        trailingReduceElements > 0U &&
-        trailingReduceElements < NONCONTIGUOUS_SPLITK_MIN_TAIL &&
-        firstTrailingAxis > 0U &&
-        firstTrailingAxis < reduceRank &&
-        expectedTrailingStride == trailingReduceElements &&
-        reduceDims[firstTrailingAxis - 1U] > 0U &&
-        reduceInputStrides[firstTrailingAxis - 1U] >=
-            trailingReduceElements &&
-        SafeMultiply(
-            reduceInputStrides[firstTrailingAxis - 1U] -
-                trailingReduceElements,
-            inputTypeBytes,
-            splitKSourceGapBytes) &&
-        splitKSourceGapBytes <=
-            std::numeric_limits<uint32_t>::max() &&
-        (splitKNaturalRows =
-             reduceElements / trailingReduceElements) >=
-            NONCONTIGUOUS_SHORT_SPLITK_MIN_ROWS &&
-        SafeMultiply(
-            (splitKNaturalRows + MAX_BLOCK_DIM - 1U) /
-                MAX_BLOCK_DIM,
-            outputElements,
-            shortTailSplitKCost) &&
-        SafeMultiply(
-            shortTailSplitKCost,
-            2U,
-            doubledShortTailSplitKCost) &&
-        splitKNaturalRows >= doubledShortTailSplitKCost;
-    if (noncontiguousShortTailSplitK) {
-        workspaceReduce = true;
-        reduceMode = 3U;
-        useTreeFinalize = true;
-    }
     const bool noncontiguousSplitK =
         fastPath == 3U &&
         inputElements >= WORKSPACE_REDUCE_INPUT_THRESHOLD &&

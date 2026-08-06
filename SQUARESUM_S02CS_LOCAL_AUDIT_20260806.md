@@ -48,44 +48,46 @@ The added route requires all of the following:
 
 - `fastPath == 3`;
 - input elements at least `2^18` and reduction elements at least `2^15`;
-- output elements in `1..8`;
+- output elements in `1..16`;
 - trailing contiguous reduced suffix in `1..1023`;
 - at least 40 natural reduction rows;
 - a valid grouped suffix layout and a source gap representable by the existing
-  `DataCopyPad` parameters.
+  `DataCopyPad` parameters;
+- the old critical natural-row count is at least twice the exact Split-K
+  row-output cost after quotient/remainder partitioning.
 
 The old path can launch at most one task per output (and sometimes fewer after
 grouping), while every task traverses all natural reduction rows. S02CS launches
 40 blocks and each block traverses all outputs but only its row share. For the
 positive local boundary models, the conservative critical-row ratio is
-`4.0x..5.0x`. The model does not count launch, synchronization or DMA command
+`2.5x..5.0x`. The model does not count launch, synchronization or DMA command
 overhead, so it is only a selection safety argument, not a performance claim.
 
 The existing kernel caps each two-dimensional DMA to 4095 rows, splits at the
 physical batch-axis boundary, pads by less than one 32-byte block, writes an
 FP32 partial for every block and uses the existing tree finalizer. The candidate
-output cap of eight is far below the 512-FP32-element capacity of the smallest
+output cap of 16 is far below the 512-FP32-element capacity of the smallest
 reinterpreted output buffer.
 
 ## Local verification
 
-- Published-domain matrix: `28/28`.
-- Route/source contract and boundary controls: `11/11`.
-- FP16/BF16/FP32 Split-K numerical model: `15/15` under the supplied official
+- Published-domain matrix: `32/32`.
+- Route/source contract and boundary controls: `14/14`.
+- FP16/BF16/FP32 Split-K numerical model: `21/21` under the supplied official
   tolerance rule.
 - Candidate kernel SHA-256 is exactly the formal S02CA kernel SHA-256.
 - Python syntax and cloud-gate shell syntax pass.
 
 The controls explicitly reject tail 1024 (the old S02BI domain), 39 rows,
-output 9, a below-threshold reduction, contiguous fastPath1 and strided
-fastPath4.
+output 17, a 41-row/output16 quotient-rounding loss, a below-threshold
+reduction, contiguous fastPath1 and strided fastPath4.
 
 ## Required cloud gate
 
 Run `diagnostics/run_squaresum_s02cs_cloud_gate_20260806.sh` with a clean
 official project template and a new work directory. The gate builds S02CA and
 S02CS from source into separate projects, installs them into isolated roots,
-runs 21 candidate correctness checks, discovers all three dtypes on the
+runs 30 candidate correctness checks, discovers all three dtypes on the
 `short_tail_splitk` tier, and performs official-compatible S02CA/S02CS/S02CA
 A/B/A profiling. It rejects less than 10% aggregate improvement, more than 3%
 per-case regression, or more than 3% baseline drift.

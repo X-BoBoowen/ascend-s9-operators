@@ -67,6 +67,8 @@ def main():
         ("tail200_negative", (200, 8, 200), (0, -1), "log_uniform"),
         ("tail1_rank4", (200, 200, 8, 1), (0, 1, 3), "uniform"),
         ("rank4_sparse", (64, 4, 2, 512), (0, 3), "small"),
+        ("output9", (80, 9, 512), (0, 2), "log_uniform"),
+        ("output16", (80, 16, 512), (0, 2), "uniform"),
     )
     passed = 0
     for name, shape, axes, distribution in layouts:
