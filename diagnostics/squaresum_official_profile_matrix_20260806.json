@@ -190,6 +190,22 @@
       "axes": [0, 2],
       "keep_dims": false,
       "tier": "atlas"
+    },
+    {
+      "name": "strided_splitk_inner64",
+      "route": "fast4",
+      "shape": [64, 2, 512, 1, 64],
+      "axes": [0, 2],
+      "keep_dims": false,
+      "tier": "strided_splitk"
+    },
+    {
+      "name": "strided_splitk_inner200",
+      "route": "fast4",
+      "shape": [200, 2, 512, 1, 200],
+      "axes": [2, 0],
+      "keep_dims": true,
+      "tier": "strided_splitk"
     }
   ]
 }

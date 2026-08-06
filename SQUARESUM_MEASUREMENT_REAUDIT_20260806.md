@@ -73,8 +73,9 @@ profiler 使用 CANN 8.5 官方支持的 `msprof --output=<dir>` 参数，将每
 python3 diagnostics/validate_squaresum_profile_matrix_20260806.py
 ```
 
-当前矩阵共 23 个 shape，全部通过题面范围与 host 路由复算；其中 core 7 个、
-atlas 12 个、extended 3 个、公开 smoke 1 个。
+当前矩阵共 25 个 shape，全部通过题面范围与 host 路由复算；其中 core 7 个、
+atlas 12 个、extended 3 个、公开 smoke 1 个，另有 2 个 fastPath4 通用
+Split-K 结构点。
 
 云端单用例命令示例：
 
@@ -106,6 +107,18 @@ bash diagnostics/run_squaresum_s02cq_cloud_gate_20260806.sh \
    新建候选包。
 5. 每个候选执行 Baseline-Candidate-Baseline，至少三组；小于 5% 的变化
    视为平台噪声，不提交正式评测。
+
+针对毫秒级 Case4 风险，新增 S02CR 通用 fastPath4 Split-K 候选和全 dtype
+多矩阵入口。它必须独立于 S02CQ 执行：
+
+```bash
+bash diagnostics/run_squaresum_s02cr_cloud_gate_20260806.sh \
+  /absolute/path/to/official/SquareSumV1/project \
+  /absolute/path/to/new/s02cr_gate_work_20260806
+```
+
+S02CR 目标矩阵要求至少 10% 总改善，不能用 S02CQ 的 BF16 改动与其混合后
+再判断来源。
 
 ## 当前不能声称的事项
 
