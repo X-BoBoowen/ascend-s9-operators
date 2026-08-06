@@ -1,0 +1,73 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+
+# Node.js
+node_modules/
+
+# Build outputs
+build/
+build_out/
+build_unique/
+dist/
+cmake-build-*/
+*.o
+*.obj
+*.so
+*.dll
+*.dylib
+*.whl
+
+# Ascend profiling and test output
+PROF*/
+*.log
+.last_test.log
+checkpoints/
+*.tgz
+*.tar.gz
+
+# Keep only the latest server-run artifacts under version control. The
+# per-operator subdirectories are written by case_910b/collect_artifact.py and
+# hold run.log / op_summary.csv, both of which the broader *.log and PROF*
+# rules above would otherwise exclude.
+!/artifact/
+!/artifact/result.json
+!/artifact/run.log
+!/artifact/*/
+!/artifact/*/run.log
+!/artifact/*/op_summary.csv
+!/artifact/*/summary.json
+
+# Matrix profiling keeps its latest raw msprof tree and per-case JSON below
+# artifact/ for local inspection. These files can be very large and are
+# reproducible; the aggregate summary remains the reviewable artifact.
+/artifact/**/msprof/
+/artifact/**/result.json
+!/artifact/result.json
+
+# Local configuration and credentials
+.env
+.env.*
+*.key
+*.pem
+
+# Editors and operating systems
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+
+# Local inspection and synchronization workspaces
+/current-submission-extracted-*/
+/final-official-contract-*/
+/final-zips-official-contract-*/
+/remote-current-*/
+/submission-docx-xml/
+/xlsx-inspect/
+/transpose-fast/
+
+# Local agent/session notes (not for remote)
+.pi-subagents/
+docs/
