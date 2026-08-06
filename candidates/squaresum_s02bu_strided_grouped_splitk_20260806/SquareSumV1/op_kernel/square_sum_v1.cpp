@@ -212,7 +212,7 @@ public:
             ProcessStridedGroupedSplitK();
             AscendC::SyncAll<true>();
             if (AscendC::GetBlockIdx() == 0U) {
-                FinalizeParallelReductionTree();
+                FinalizeParallelReductionSequential();
             }
             return;
         }
