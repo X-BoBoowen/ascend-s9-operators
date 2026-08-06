@@ -1,5 +1,5 @@
 
-[2026-08-06 18:37:34 +0800] $ cd /home/ma-user/work/s9/repository/ascend-s9-operators && rm -f -- diagnostics/squaresum_s02cm_inner_sweep_20260806.py && git pull --ff-only origin main && git rev-parse --short HEAD && git status --short | head -n 20
+[2026-08-06 19:09:18 +0800] $ set -euo pipefail; release=/home/ma-user/work/s9/releases/squaresum_s02cn_20260806_1910; "$release/extracted/SquareSumV1_zip/custom_opp_euleros_aarch64.run" --quiet > "$release/install_release.log" 2>&1; cd /home/ma-user/work/s9/repository/ascend-s9-operators; export PYTHONPATH=$PWD/validation/SquareSumV1:$PYTHONPATH; export LD_LIBRARY_PATH=/home/ma-user/Ascend/cann-8.5.0/opp/vendors/customize/op_api/lib:$LD_LIBRARY_PATH; python /home/ma-user/work/s9/experiments/squaresum_s02cn_middle_full_rows_20260806_1845/squaresum_s02cn_middle_full_rows_correctness_20260806.py s02cn_release > "$release/correctness_release.log" 2>&1; tail -n 1 "$release/correctness_release.log"; sha256sum "$release/SquareSumV1.zip" "$release/extracted/SquareSumV1_zip/custom_opp_euleros_aarch64.run"
 The environment has been set
 The environment has been set
  __  __               _          _                      _
@@ -15,28 +15,6 @@ Tips:
 2) Copy (Ctrl+C) and paste (Ctrl+V) on the jupyter terminal.
 3) Store your data in /home/ma-user/work, to which a persistent volume is mounted.
 4) Exercise caution when using plaintext passwords, hard-coded AK/SK, or directly entering them in the command line.
-From https://github.com/X-BoBoowen/ascend-s9-operators
- * branch            main       -> FETCH_HEAD
-   ef72a52..8844d57  main       -> origin/main
-Updating ef72a52..8844d57
-Fast-forward
- README.md                                          |  43 +++-
- SQUARESUM_S02CM_CLOUD_REPORT_20260806.md           | 149 +++++++++++
- artifact/result.json                               |   8 +-
- artifact/run.log                                   |  62 ++---
- .../SquareSumV1/op_host/square_sum_v1.cpp          |   6 +-
- .../SquareSumV1/op_kernel/square_sum_v1.cpp        | 274 ++++++++++++++++-----
- .../squaresum_s02cm_inner_sweep_20260806.py        |  80 ++++++
- 7 files changed, 503 insertions(+), 119 deletions(-)
- create mode 100644 SQUARESUM_S02CM_CLOUD_REPORT_20260806.md
- create mode 100644 diagnostics/squaresum_s02cm_inner_sweep_20260806.py
-8844d57
-?? extra-info/
-?? validation/SquareSumV1/common
-?? validation/SquareSumV1/extra-info/
-?? validation/SquareSumV1/squaresum_contiguous_sweep_20260730.py
-?? validation/SquareSumV1/squaresum_finalizer_sweep_20260730.py
-?? validation/SquareSumV1/squaresum_segmented_probe_20260730.py
-?? validation/SquareSumV1/squaresum_strided_sweep_20260730.py
-?? validation/Transpose/common/
-?? validation/common/
+S02CN_CORRECTNESS_SUMMARY label=s02cn_release passed=96/96
+1d04777575176a168860cda1be96b2f75779c7faaef401e78dfa4f8845d28e16  /home/ma-user/work/s9/releases/squaresum_s02cn_20260806_1910/SquareSumV1.zip
+4e72ea2372b9c94719610d1343c8e1d4b6f1b220ac7a68b5c61497ea85a778b3  /home/ma-user/work/s9/releases/squaresum_s02cn_20260806_1910/extracted/SquareSumV1_zip/custom_opp_euleros_aarch64.run
