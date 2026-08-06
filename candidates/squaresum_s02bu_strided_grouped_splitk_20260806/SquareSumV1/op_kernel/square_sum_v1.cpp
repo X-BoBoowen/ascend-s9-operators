@@ -212,7 +212,7 @@ public:
             ProcessStridedGroupedSplitK();
             AscendC::SyncAll<true>();
             if (AscendC::GetBlockIdx() == 0U) {
-                FinalizeParallelReductionSequential();
+                FinalizeParallelReductionTree(true);
             }
             return;
         }
@@ -1178,7 +1178,8 @@ private:
         }
     }
 
-    __aicore__ inline void FinalizeParallelReductionTree()
+    __aicore__ inline void FinalizeParallelReductionTree(
+        const bool gatherRows = false)
     {
         AscendC::LocalTensor<T> outputLocal =
             outputBuffer_.Get<T>();
@@ -1222,14 +1223,8 @@ private:
             const uint32_t floatPadded =
                 (current + 7U) / 8U * 8U;
             AscendC::DataCopyExtParams copyParams;
-            copyParams.blockCount =
-                static_cast<uint16_t>(blockNum);
             copyParams.blockLen =
                 current * sizeof(float);
-            copyParams.srcStride =
-                static_cast<uint32_t>(
-                    (partialStride_ - current) *
-                    sizeof(float));
             copyParams.dstStride = 0;
             AscendC::DataCopyPadExtParams<float> padParams;
             padParams.isPad = floatPadded != current;
@@ -1238,11 +1233,32 @@ private:
                 static_cast<uint8_t>(
                     floatPadded - current);
             padParams.paddingValue = 0.0f;
-            AscendC::DataCopyPad(
-                valueLocal,
-                workspaceGm_[outputStart],
-                copyParams,
-                padParams);
+            if (gatherRows) {
+                copyParams.blockCount = 1U;
+                copyParams.srcStride = 0U;
+                for (uint32_t block = 0U;
+                     block < blockNum;
+                     ++block) {
+                    AscendC::DataCopyPad(
+                        valueLocal[block * floatPadded],
+                        workspaceGm_[
+                            block * partialStride_ + outputStart],
+                        copyParams,
+                        padParams);
+                }
+            } else {
+                copyParams.blockCount =
+                    static_cast<uint16_t>(blockNum);
+                copyParams.srcStride =
+                    static_cast<uint32_t>(
+                        (partialStride_ - current) *
+                        sizeof(float));
+                AscendC::DataCopyPad(
+                    valueLocal,
+                    workspaceGm_[outputStart],
+                    copyParams,
+                    padParams);
+            }
             if (reductionRows > blockNum) {
                 AscendC::Duplicate(
                     valueLocal[

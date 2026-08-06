@@ -77,8 +77,8 @@ def main():
     assert "reduceMode_ == 5U" in kernel
     mode5 = kernel[kernel.index("if (reduceMode_ == 5U)") :]
     mode5 = mode5[: mode5.index("if (reduceMode_ == 2U")]
-    assert "FinalizeParallelReductionSequential();" in mode5
-    assert "FinalizeParallelReductionTree();" not in mode5
+    assert "FinalizeParallelReductionTree(true);" in mode5
+    assert "FinalizeParallelReductionSequential();" not in mode5
     assert "partialWorkspaceOffset + outputStart" in kernel
     kernel_compact = " ".join(kernel.split())
     assert (
