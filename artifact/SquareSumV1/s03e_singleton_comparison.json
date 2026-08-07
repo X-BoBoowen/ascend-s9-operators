@@ -1,0 +1,77 @@
+{
+  "schema_version": 1,
+  "passed": false,
+  "thresholds": {
+    "minimum_improvement_percent": 10.0,
+    "maximum_regression_percent": 3.0,
+    "maximum_baseline_drift_percent": 3.0
+  },
+  "baseline_sum": 424498250.0,
+  "candidate_sum": 65480500.0,
+  "aggregate_improvement_percent": 84.57461249840253,
+  "drift_ok": false,
+  "regression_ok": true,
+  "improvement_ok": true,
+  "cases": [
+    {
+      "case": "s03d_singleton_gap_fast1",
+      "dtype": "bf16",
+      "baseline_a": 44020500.0,
+      "candidate": 5150000.0,
+      "baseline_b": 43920500.0,
+      "baseline_median": 43970500.0,
+      "baseline_drift_percent": 0.2274252055355295,
+      "improvement_percent": 88.28760191492023
+    },
+    {
+      "case": "s03d_singleton_gap_fast1",
+      "dtype": "fp16",
+      "baseline_a": 40530500.0,
+      "candidate": 4550000.0,
+      "baseline_b": 40511000.0,
+      "baseline_median": 40520750.0,
+      "baseline_drift_percent": 0.048123492284817035,
+      "improvement_percent": 88.7711851335427
+    },
+    {
+      "case": "s03d_singleton_gap_fast1",
+      "dtype": "fp32",
+      "baseline_a": 42221000.0,
+      "candidate": 4890000.0,
+      "baseline_b": 42461000.0,
+      "baseline_median": 42341000.0,
+      "baseline_drift_percent": 0.5668264802437354,
+      "improvement_percent": 88.4509104650339
+    },
+    {
+      "case": "s03d_singleton_gap_fast2",
+      "dtype": "bf16",
+      "baseline_a": 117322000.0,
+      "candidate": 17000500.0,
+      "baseline_b": 117662500.0,
+      "baseline_median": 117492250.0,
+      "baseline_drift_percent": 0.2898063489293975,
+      "improvement_percent": 85.53053499273356
+    },
+    {
+      "case": "s03d_singleton_gap_fast2",
+      "dtype": "fp16",
+      "baseline_a": 97242000.0,
+      "candidate": 16260000.0,
+      "baseline_b": 97272000.0,
+      "baseline_median": 97257000.0,
+      "baseline_drift_percent": 0.030846108763379503,
+      "improvement_percent": 83.28140905024831
+    },
+    {
+      "case": "s03d_singleton_gap_fast2",
+      "dtype": "fp32",
+      "baseline_a": 81432000.0,
+      "candidate": 17630000.0,
+      "baseline_b": 84401500.0,
+      "baseline_median": 82916750.0,
+      "baseline_drift_percent": 3.581302933363886,
+      "improvement_percent": 78.73770981134692
+    }
+  ]
+}

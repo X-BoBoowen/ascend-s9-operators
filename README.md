@@ -15,20 +15,17 @@
 - Git 仓库保存源码、测试与文档，不保存 `.run`、ZIP、wheel 和
   profiler 数据库。
 
-> 状态时间：2026-08-06（Asia/Shanghai）
+> 状态时间：2026-08-07（Asia/Shanghai）
 >
 > 当前阶段：完整正式记录复核后确认真正的历史最好是 S02F
 > `3223.995 μs`，不是后续文档误写的 S02CA `3982.569 μs`。S02F 的
 > Case1～Case5 为 `6.530 / 394.308 / 237.885 / 1716.7145 /
-> 868.5575 μs`；S02CA 仅是 S02BA 后继路线中的局部最低值。
-> 新一轮已经从官方 S02F ZIP 逐字节恢复基线，并建立三个互相独立的候选：
-> S03A 删除八组 BF16 中间量化往返；S03B 为 fastPath4 的低并行大归约
-> 增加 40 核通用 Split-K；S03D 只把被 size-one 保留维隔开的物理连续
-> 归约提升到已有 fastPath1/2。矩阵 `34/34`、S03A 静态 `12/12` 与数值
-> `27/27`、S03B 静态 `8/8` 与数值/坐标 `45/45`、S03D 路由/坐标
-> `9/9` 均通过。三者尚未在 910B/CANN 8.5.0 构建或运行，禁止打包提交；
-> 下一步必须执行隔离构建和正式兼容 A/B/A 云端门禁。完整证据见
-> [`SQUARESUM_S03_LOCAL_AUDIT_20260806.md`](./SQUARESUM_S03_LOCAL_AUDIT_20260806.md)。
+> 868.5575 μs`。S03B 的通用 Split-K 与 S03D 的 singleton-gap 路由已经
+> 合并为 S03E，并在 910B4/CANN 8.5.0 完成隔离构建、`126/126` 正确性
+> 和 A/B/A：两个覆盖域分别改善 `86.7365%` 与 `84.5746%`。当前
+> `submission-src/SquareSumV1` 已提升为 S03E，上传包已生成，但尚无平台
+> 隐藏 Case 成绩。完整证据见
+> [`SQUARESUM_S03E_CLOUD_GATE_20260807.md`](./SQUARESUM_S03E_CLOUD_GATE_20260807.md)。
 
 下一轮完整执行方案见
 [`OPTIMIZATION_PLAN_20260730.md`](./OPTIMIZATION_PLAN_20260730.md)。
@@ -43,7 +40,7 @@
 | Greater | 本轮完成 | 26 定向 + 220 随机 + 9 个 int32 扩展；扩展集连续复跑 3 次 | 已生成并审计 | 5/5 Pass，18595.372 |
 | IndexAdd | 本轮完成 | 23 定向 + 170 随机 + 345 扩展 = 538 | 已生成并审计 | 5/5 Pass，119427.8755 |
 | Transpose | 本轮完成 | 48 定向 + 200 随机 + 152 扩展 + 84 边界 = 484 | 已生成并审计 | 5/5 Pass，16303.227 |
-| SquareSumV1 | S03A/S03B/S03D 三个 S02F 独立候选，待云端门禁 | 矩阵 34/34；S03A 12/12 + 27/27；S03B 8/8 + 45/45；S03D 9/9；真机未运行 | 禁止打包 | 正式最好 S02F 3223.995；后续 S02CA 3982.569 不是全局最好 |
+| SquareSumV1 | S03E（S03B Split-K + S03D singleton-gap）已提升到提交源码 | 组合正确性 126/126；两域 A/B/A 改善 86.7365% / 84.5746% | `20260807/S03E/SquareSumV1.zip` 已生成并审计 | 待平台；正式最好仍为 S02F 3223.995 |
 
 这里的“本轮完成”表示：
 
@@ -67,7 +64,7 @@ D:\29722\Desktop\GCC\提交相关材料\
 |-- Greater.zip
 |-- IndexAdd.zip
 |-- Transpose.zip
-`-- SquareSumV1.zip
+`-- 20260807/S03E/SquareSumV1.zip
 ```
 
 | 文件 | 大小 | SHA-256 |
@@ -76,7 +73,7 @@ D:\29722\Desktop\GCC\提交相关材料\
 | `Greater.zip` | 398168 B | `316797810d06b57d18c898d1fe449c1b0b51565c6a842845dded75524f7f868d` |
 | `IndexAdd.zip` | 417920 B | `cf8c08a60d3b356686a07e136766dd06128afa87dccf67d9c9940330843d990b` |
 | `Transpose.zip` | 401378 B | `52850235386690dcd89bf0fff039a4e510345a725aa2616d5f2a7c4d4fb5f1d0` |
-| `SquareSumV1.zip` | 473756 B | `eecd9f1fd6b4c0617b6ec2ec632f24bb0f310d5a9d2f2125f03f6ec86ecfaf5b` |
+| `20260807/S03E/SquareSumV1.zip` | 483639 B | `dd4b22bc7eb5000c07357bd9d2355bb6b8e7bdf9e61cb7e8fb4fb3a5196f19b2` |
 
 包内 `.run`：
 
@@ -86,7 +83,7 @@ D:\29722\Desktop\GCC\提交相关材料\
 | Greater | `d8ab6f81aa1eaa775cbe69078db09901037ccad667216697371475a42dbb4298` |
 | IndexAdd | `58a5be8bbbc8db62708973fea21bd6630e1d938ae9c8a4ad28132f3014ce679d` |
 | Transpose | `2baf9ecb7e38716b5d4a7ca8e89c890be2392c4b8c9352d8ca67d8d23ca9a9af` |
-| SquareSumV1 | `aaa8096582170bab688607e40651e8c1d8b9b86e7f889f61948c8d1ce7320563` |
+| SquareSumV1 | `e0c065ea9cee4b7720e563856ea15292e23d3c59e561b8d4ecb577f5a7ee2719` |
 
 五个 ZIP 均只有一个顶层 `<Operator>_zip/`，包含 `op_host/`、
 `op_kernel/` 和一个非空 `custom_opp_euleros_aarch64.run`。

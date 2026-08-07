@@ -59,7 +59,8 @@ cp -a -- "${source_dir}/op_kernel/." "${output_project}/op_kernel/"
 )
 
 mapfile -t packages < <(
-    find "${output_project}/build_out" -type f -name 'custom_opp*.run' -print
+    find "${output_project}/build_out" -maxdepth 1 -type f \
+        -name 'custom_opp*.run' -print
 )
 if (( ${#packages[@]} != 1 )); then
     echo "expected exactly one custom_opp package, found ${#packages[@]}" >&2

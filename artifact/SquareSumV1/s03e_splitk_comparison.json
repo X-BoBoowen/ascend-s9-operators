@@ -1,0 +1,77 @@
+{
+  "schema_version": 1,
+  "passed": true,
+  "thresholds": {
+    "minimum_improvement_percent": 10.0,
+    "maximum_regression_percent": 3.0,
+    "maximum_baseline_drift_percent": 3.0
+  },
+  "baseline_sum": 8347582250.0,
+  "candidate_sum": 1107182000.0,
+  "aggregate_improvement_percent": 86.73649486951746,
+  "drift_ok": true,
+  "regression_ok": true,
+  "improvement_ok": true,
+  "cases": [
+    {
+      "case": "strided_splitk_inner200",
+      "dtype": "bf16",
+      "baseline_a": 2340126500.0,
+      "candidate": 315746000.0,
+      "baseline_b": 2342817000.0,
+      "baseline_median": 2341471750.0,
+      "baseline_drift_percent": 0.11490636177865482,
+      "improvement_percent": 86.51506258830584
+    },
+    {
+      "case": "strided_splitk_inner200",
+      "dtype": "fp16",
+      "baseline_a": 2174283500.0,
+      "candidate": 304836000.0,
+      "baseline_b": 2170463500.0,
+      "baseline_median": 2172373500.0,
+      "baseline_drift_percent": 0.17584453133864872,
+      "improvement_percent": 85.96760639917584
+    },
+    {
+      "case": "strided_splitk_inner200",
+      "dtype": "fp32",
+      "baseline_a": 2834767000.0,
+      "candidate": 360407500.0,
+      "baseline_b": 2847497000.0,
+      "baseline_median": 2841132000.0,
+      "baseline_drift_percent": 0.44806084335398705,
+      "improvement_percent": 87.314651343197
+    },
+    {
+      "case": "strided_splitk_inner64",
+      "dtype": "bf16",
+      "baseline_a": 394518000.0,
+      "candidate": 39440500.0,
+      "baseline_b": 394858000.0,
+      "baseline_median": 394688000.0,
+      "baseline_drift_percent": 0.08614399221663693,
+      "improvement_percent": 90.00717022052862
+    },
+    {
+      "case": "strided_splitk_inner64",
+      "dtype": "fp16",
+      "baseline_a": 323446500.0,
+      "candidate": 37091000.0,
+      "baseline_b": 323466000.0,
+      "baseline_median": 323456250.0,
+      "baseline_drift_percent": 0.006028636021100226,
+      "improvement_percent": 88.53291596622418
+    },
+    {
+      "case": "strided_splitk_inner64",
+      "dtype": "fp32",
+      "baseline_a": 274835500.0,
+      "candidate": 49661000.0,
+      "baseline_b": 274086000.0,
+      "baseline_median": 274460750.0,
+      "baseline_drift_percent": 0.2730809414460902,
+      "improvement_percent": 81.90597380499763
+    }
+  ]
+}

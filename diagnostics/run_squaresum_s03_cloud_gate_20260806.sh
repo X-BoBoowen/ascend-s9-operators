@@ -3,17 +3,30 @@ set -euo pipefail
 
 template_project="${1:?usage: $0 TEMPLATE_PROJECT WORK_ROOT}"
 work_root="${2:?usage: $0 TEMPLATE_PROJECT WORK_ROOT}"
+resume_mode="${3:-fresh}"
+if [[ "${resume_mode}" != "fresh" && "${resume_mode}" != "--resume" ]]; then
+    echo "third argument must be --resume when provided" >&2
+    exit 2
+fi
 
 script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
 repo_root="$(cd -- "${script_dir}/.." && pwd -P)"
 template_project="$(cd -- "${template_project}" && pwd -P)"
 
-if [[ -e "${work_root}" ]]; then
-    echo "work root already exists: ${work_root}" >&2
-    exit 2
+if [[ "${resume_mode}" == "--resume" ]]; then
+    if [[ ! -d "${work_root}" ]]; then
+        echo "resume work root does not exist: ${work_root}" >&2
+        exit 2
+    fi
+    work_root="$(cd -- "${work_root}" && pwd -P)"
+else
+    if [[ -e "${work_root}" ]]; then
+        echo "work root already exists: ${work_root}" >&2
+        exit 2
+    fi
+    work_parent="$(cd -- "$(dirname -- "${work_root}")" && pwd -P)"
+    work_root="${work_parent}/$(basename -- "${work_root}")"
 fi
-work_parent="$(cd -- "$(dirname -- "${work_root}")" && pwd -P)"
-work_root="${work_parent}/$(basename -- "${work_root}")"
 if [[ "${work_root}" == "/" || "${work_root}" == "${repo_root}" ]]; then
     echo "refusing unsafe work root: ${work_root}" >&2
     exit 2
@@ -26,7 +39,9 @@ s03d_source="${repo_root}/candidates/squaresum_s03d_s02f_singleton_gap_20260806/
 artifact_dir="${repo_root}/artifact"
 detail_root="${artifact_dir}/SquareSumV1"
 
-mkdir -- "${work_root}"
+if [[ "${resume_mode}" == "fresh" ]]; then
+    mkdir -- "${work_root}"
+fi
 if [[ "${artifact_dir}" != "${repo_root}/artifact" || "${artifact_dir}" == "/" ]]; then
     echo "refusing unsafe artifact directory: ${artifact_dir}" >&2
     exit 2
@@ -68,6 +83,13 @@ trap 'write_failure_result "$?"' EXIT
 
 echo "S03_GATE_START repo=${repo_root} template=${template_project} work=${work_root}"
 cd -- "${repo_root}"
+validation_dir="${repo_root}/validation/SquareSumV1"
+if ! compgen -G "${validation_dir}/square_sum_v1_validation_lib*.so" \
+        >/dev/null; then
+    echo "SquareSumV1 validation extension is missing below ${validation_dir}" >&2
+    exit 2
+fi
+export PYTHONPATH="${validation_dir}${PYTHONPATH:+:${PYTHONPATH}}"
 
 gate_stage="local_preflight"
 python3 diagnostics/validate_squaresum_profile_matrix_20260806.py
@@ -78,25 +100,37 @@ python3 diagnostics/squaresum_s02cr_splitk_semantics_model_20260806.py
 python3 diagnostics/squaresum_s03d_singleton_gap_static_20260806.py
 
 gate_stage="build"
-mkdir -p -- "${work_root}/projects" "${work_root}/install"
-for name in s02f s03a s03b s03d; do
-    case "${name}" in
-        s02f) source_path="${baseline_source}" ;;
-        s03a) source_path="${s03a_source}" ;;
-        s03b) source_path="${s03b_source}" ;;
-        s03d) source_path="${s03d_source}" ;;
-    esac
-    bash diagnostics/build_squaresum_source_20260806.sh \
-        "${source_path}" \
-        "${template_project}" \
-        "${work_root}/projects/${name}"
-done
+if [[ "${resume_mode}" == "fresh" ]]; then
+    mkdir -p -- "${work_root}/projects" "${work_root}/install"
+    for name in s02f s03a s03b s03d; do
+        case "${name}" in
+            s02f) source_path="${baseline_source}" ;;
+            s03a) source_path="${s03a_source}" ;;
+            s03b) source_path="${s03b_source}" ;;
+            s03d) source_path="${s03d_source}" ;;
+        esac
+        bash diagnostics/build_squaresum_source_20260806.sh \
+            "${source_path}" \
+            "${template_project}" \
+            "${work_root}/projects/${name}"
+    done
+else
+    echo "S03_GATE_RESUME work=${work_root}"
+    for name in s02f s03a s03b s03d; do
+        if [[ ! -d "${work_root}/projects/${name}/build_out" ||
+              ! -d "${work_root}/install/${name}" ]]; then
+            echo "resume state is incomplete for ${name}" >&2
+            exit 2
+        fi
+    done
+fi
 
 find_package() {
     local project="$1"
     local -a matches=()
     mapfile -t matches < <(
-        find "${project}/build_out" -type f -name 'custom_opp*.run' -print
+        find "${project}/build_out" -maxdepth 1 -type f \
+            -name 'custom_opp*.run' -print
     )
     if (( ${#matches[@]} != 1 )); then
         echo "expected one package below ${project}, found ${#matches[@]}" >&2
@@ -127,10 +161,12 @@ find_env_file() {
     printf '%s\n' "${matches[0]}"
 }
 
-for name in s02f s03a s03b s03d; do
-    package="$(find_package "${work_root}/projects/${name}")"
-    install_package "${package}" "${work_root}/install/${name}"
-done
+if [[ "${resume_mode}" == "fresh" ]]; then
+    for name in s02f s03a s03b s03d; do
+        package="$(find_package "${work_root}/projects/${name}")"
+        install_package "${package}" "${work_root}/install/${name}"
+    done
+fi
 
 baseline_env="$(find_env_file "${work_root}/install/s02f")"
 s03a_env="$(find_env_file "${work_root}/install/s03a")"
@@ -140,19 +176,21 @@ s03d_env="$(find_env_file "${work_root}/install/s03d")"
 run_with_opp() {
     local env_file="$1"
     shift
-    bash -c 'set -euo pipefail; source "$1"; shift; exec "$@"' \
+    # Vendor set_env.bash probes optional variables before defining them, so
+    # nounset must only be enabled after the environment has been loaded.
+    bash -c 'set -eo pipefail; source "$1"; set -u; shift; exec "$@"' \
         _ "${env_file}" "$@"
 }
 
 gate_stage="isolated_import"
 run_with_opp "${baseline_env}" python3 -c \
-    'import square_sum_v1_validation_lib; print("S02F_IMPORT_OK")'
+    'import torch, torch_npu, square_sum_v1_validation_lib; print("S02F_IMPORT_OK")'
 run_with_opp "${s03a_env}" python3 -c \
-    'import square_sum_v1_validation_lib; print("S03A_IMPORT_OK")'
+    'import torch, torch_npu, square_sum_v1_validation_lib; print("S03A_IMPORT_OK")'
 run_with_opp "${s03b_env}" python3 -c \
-    'import square_sum_v1_validation_lib; print("S03B_IMPORT_OK")'
+    'import torch, torch_npu, square_sum_v1_validation_lib; print("S03B_IMPORT_OK")'
 run_with_opp "${s03d_env}" python3 -c \
-    'import square_sum_v1_validation_lib; print("S03D_IMPORT_OK")'
+    'import torch, torch_npu, square_sum_v1_validation_lib; print("S03D_IMPORT_OK")'
 
 gate_stage="candidate_correctness"
 run_with_opp "${s03a_env}" python3 \

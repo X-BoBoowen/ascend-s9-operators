@@ -1,0 +1,27 @@
+{
+  "schema_version": 1,
+  "passed": true,
+  "thresholds": {
+    "minimum_improvement_percent": 10.0,
+    "maximum_regression_percent": 3.0,
+    "maximum_baseline_drift_percent": 3.0
+  },
+  "baseline_sum": 81406250.0,
+  "candidate_sum": 17300000.0,
+  "aggregate_improvement_percent": 78.7485604606526,
+  "drift_ok": true,
+  "regression_ok": true,
+  "improvement_ok": true,
+  "cases": [
+    {
+      "case": "s03d_singleton_gap_fast2",
+      "dtype": "fp32",
+      "baseline_a": 81331000.0,
+      "candidate": 17300000.0,
+      "baseline_b": 81481500.0,
+      "baseline_median": 81406250.0,
+      "baseline_drift_percent": 0.18487523992322458,
+      "improvement_percent": 78.7485604606526
+    }
+  ]
+}
