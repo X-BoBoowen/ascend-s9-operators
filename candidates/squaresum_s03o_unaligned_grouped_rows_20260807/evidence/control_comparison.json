@@ -1,0 +1,48 @@
+{
+  "schema_version": 1,
+  "passed": true,
+  "maximum_regression_percent": 3.0,
+  "baseline_mode": "same-instance historical S03N profile",
+  "cases": [
+    {
+      "dtype": "fp32",
+      "case": "s03o_target_reduce128_inner15",
+      "baseline": 2003210000,
+      "candidate": 2003530000,
+      "regression_percent": 0.015974361150353684,
+      "passed": true
+    },
+    {
+      "dtype": "fp16",
+      "case": "s03o_target_reduce127_inner15",
+      "baseline": 2559251000,
+      "candidate": 2564371000,
+      "regression_percent": 0.20005853275040236,
+      "passed": true
+    },
+    {
+      "dtype": "fp16",
+      "case": "s03o_target_reduce128_inner17",
+      "baseline": 2481830000,
+      "candidate": 2489099000,
+      "regression_percent": 0.29288871518194237,
+      "passed": true
+    },
+    {
+      "dtype": "fp16",
+      "case": "s03o_target_reduce128_inner31",
+      "baseline": 1030851000,
+      "candidate": 1034039999,
+      "regression_percent": 0.3093559592996466,
+      "passed": true
+    },
+    {
+      "dtype": "fp16",
+      "case": "s03o_target_reduce128_inner63",
+      "baseline": 534611000,
+      "candidate": 533540500,
+      "regression_percent": -0.20023905232028522,
+      "passed": true
+    }
+  ]
+}

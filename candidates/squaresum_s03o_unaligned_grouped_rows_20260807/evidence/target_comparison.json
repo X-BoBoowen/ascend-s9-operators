@@ -1,0 +1,40 @@
+{
+  "schema_version": 1,
+  "passed": true,
+  "thresholds": {
+    "minimum_improvement_percent": 50.0,
+    "minimum_point_improvement_percent": 50.0,
+    "maximum_regression_percent": 3.0,
+    "maximum_baseline_drift_percent": 3.0
+  },
+  "baseline_sum": 5186443000.0,
+  "candidate_sum": 2542771000.0,
+  "aggregate_improvement_percent": 50.97273796318594,
+  "minimum_point_improvement_percent": 50.52740232168814,
+  "drift_ok": true,
+  "regression_ok": true,
+  "improvement_ok": true,
+  "point_improvement_ok": true,
+  "cases": [
+    {
+      "case": "s03o_target_reduce128_inner15",
+      "dtype": "bf16",
+      "baseline_a": 2602312000.0,
+      "candidate": 1285576000.0,
+      "baseline_b": 2594811500.0,
+      "baseline_median": 2598561750.0,
+      "baseline_drift_percent": 0.28864043734962236,
+      "improvement_percent": 50.52740232168814
+    },
+    {
+      "case": "s03o_target_reduce128_inner15",
+      "dtype": "fp16",
+      "baseline_a": 2587601500.0,
+      "candidate": 1257195000.0,
+      "baseline_b": 2588161000.0,
+      "baseline_median": 2587881250.0,
+      "baseline_drift_percent": 0.021620002849821646,
+      "improvement_percent": 51.419911558924895
+    }
+  ]
+}

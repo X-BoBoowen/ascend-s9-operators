@@ -1,17 +1,9 @@
-[2026-08-07] SquareSumV1 S03L cloud gate
-Environment: Ascend 910B, CANN 8.5.0
-Build/install: PASS
-Target A/B/A: 15/15 PASS
-Target baseline total: 18763.6500285 us
-Target candidate total: 1950.220019 us
-Target aggregate improvement: 89.6063931269%
-Minimum target-point improvement: 79.2199846417%
-Maximum target baseline drift: 9.6075160178%
-Control A/B/A: 18/18 PASS
-Maximum control regression: 7.2829845739%
-Maximum control baseline drift: 5.4653578779%
-Correctness: 1235/1235 PASS
-Package audit: PASS (9 entries, SquareSumV1_zip/, run mode 0755)
-ZIP SHA-256: 3a61968292fde3b3cc876b4dcac0e585a9bc039683ccd0767ff17522dd158d4f
-RUN SHA-256: e46a29644b03c70f960533d2e1c2b2118e4e1f746e35fdebab48508d58dc2acd
-Formal platform result: pending
+[2026-08-07 19:38:37 +0800] Cloud main synchronized to 4b8657c.
+[2026-08-07 19:39:12 +0800] Fresh CANN 8.5.0 build started.
+[2026-08-07 19:39:46 +0800] Build and package creation passed; package SHA-256 4adeaeea2f5524685835079c6a17a541b7dda9da5339f405931e1ce77342b3f1.
+[2026-08-07 19:40:02 +0800] Package installed independently.
+[2026-08-07 19:45:55 +0800] Complete device correctness passed 1325/1325.
+[2026-08-07 19:49:50 +0800] FP16/BF16 target A/B/A passed: aggregate improvement 50.9727%, minimum point 50.5274%, maximum drift 0.2887%.
+[2026-08-07 19:53:27 +0800] Five focused fallback controls passed: maximum apparent regression 0.3094%.
+[2026-08-07 19:55:56 +0800] Submission ZIP audit passed: 9 entries, one top-level directory, source byte equality, run mode 0755.
+[2026-08-07 19:56:15 +0800] Latest internal run complete; formal platform submission is pending.

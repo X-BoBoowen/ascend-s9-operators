@@ -1,0 +1,22 @@
+{
+  "schema_version": 1,
+  "candidate": "S03O",
+  "passed": true,
+  "environment": {
+    "device": "Ascend 910B",
+    "cann": "8.5.0"
+  },
+  "package_sha256": "4adeaeea2f5524685835079c6a17a541b7dda9da5339f405931e1ce77342b3f1",
+  "suites": {
+    "directed": 46,
+    "bf16_semantics": 4,
+    "random": 150,
+    "extended": 726,
+    "s03j_boundary": 135,
+    "s03k_boundary": 69,
+    "s03m_boundary": 105,
+    "s03n_boundary": 45,
+    "s03o_boundary": 45
+  },
+  "total": 1325
+}

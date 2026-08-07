@@ -1,50 +1,43 @@
 {
   "schema_version": 1,
   "operator": "SquareSumV1",
-  "candidate": "S03L",
+  "candidate": "S03O",
+  "status": "internal_gate_pass_formal_platform_pending",
   "passed": true,
   "environment": {
     "device": "Ascend 910B",
     "cann": "8.5.0"
   },
-  "target_aba": {
-    "points_passed": 15,
-    "points_total": 15,
-    "baseline": "S03K",
-    "baseline_total_us": 18763.6500285,
-    "candidate_total_us": 1950.220019,
-    "aggregate_improvement_percent": 89.6063931269,
-    "minimum_improvement_percent": 79.2199846417,
-    "maximum_baseline_drift_percent": 9.6075160178
-  },
-  "control_aba": {
-    "points_passed": 18,
-    "points_total": 18,
-    "maximum_regression_percent": 7.2829845739,
-    "maximum_baseline_drift_percent": 5.4653578779
+  "git": {
+    "branch": "main",
+    "candidate_commit": "4b8657c"
   },
   "correctness": {
-    "passed": 1235,
-    "total": 1235,
-    "suites": {
-      "directed": 46,
-      "bf16_semantics": 4,
-      "random": 150,
-      "extended": 726,
-      "s03j_boundary": 135,
-      "s03k_boundary": 69,
-      "s03l_boundary": 105
-    }
+    "passed": 1325,
+    "total": 1325
+  },
+  "target_performance": {
+    "passed": true,
+    "baseline_sum_us": 5186.443,
+    "candidate_sum_us": 2542.771,
+    "aggregate_improvement_percent": 50.97273796318594,
+    "minimum_point_improvement_percent": 50.52740232168814,
+    "maximum_baseline_drift_percent": 0.28864043734962236
+  },
+  "fallback_controls": {
+    "passed": true,
+    "case_count": 5,
+    "maximum_regression_percent": 0.3093559592996466
   },
   "package": {
-    "entries": 9,
-    "top_directory": "SquareSumV1_zip",
-    "run_mode": "0755",
-    "zip_size_bytes": 494527,
-    "zip_sha256": "3a61968292fde3b3cc876b4dcac0e585a9bc039683ccd0767ff17522dd158d4f",
-    "run_sha256": "e46a29644b03c70f960533d2e1c2b2118e4e1f746e35fdebab48508d58dc2acd"
+    "path": "D:/29722/Desktop/GCC/提交相关材料/20260807/S03O/SquareSumV1.zip",
+    "size_bytes": 495610,
+    "zip_sha256": "67aeae465123c0cafadcb8da2870fe707dfe1e2b96c4fdebb9885201cbe972d3",
+    "run_sha256": "4adeaeea2f5524685835079c6a17a541b7dda9da5339f405931e1ce77342b3f1"
   },
-  "formal_platform_result": null,
-  "report": "SQUARESUM_S03L_CLOUD_GATE_20260807.md",
+  "formal_platform": {
+    "submitted": false,
+    "result": null
+  },
   "log": "artifact/run.log"
 }
