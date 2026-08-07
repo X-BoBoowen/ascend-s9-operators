@@ -70,4 +70,5 @@ Thumbs.db
 
 # Local agent/session notes (not for remote)
 .pi-subagents/
+/.worktrees/
 docs/

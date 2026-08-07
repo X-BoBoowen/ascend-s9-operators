@@ -8,6 +8,8 @@
 
 **Tech Stack:** Ascend C、C++、CANN 社区版 8.5.0、Ascend 910B、Python 3.9、PyTorch NPU、Bash、`msprof`、Git main。
 
+**TDD execution amendment:** `squaresum_s03m_s03o_static_20260807.py` 是独立路由/容量审计，不作为行为测试。修改候选源码前，先完成 Task 3 的真实设备正确性和 `msprof` 门禁脚本，并令 baseline 与 candidate 都指向 S02F；正确性应通过，而“目标路径至少改善 50%”必须失败。只有观察到这一预期 RED 后才实施 key 7，并用同一脚本取得 GREEN。源码标志搜索只用于检查打包和注册遗漏，不用于证明功能或性能。
+
 ## Global Constraints
 
 - 所有功能、构建和性能验证使用 Ascend 910B 与 CANN 社区版 8.5.0。
