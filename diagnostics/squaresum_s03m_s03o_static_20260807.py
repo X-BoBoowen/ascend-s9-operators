@@ -176,7 +176,7 @@ def run_model_checks(stage):
             129: 2,
         }
         for last_reduce, width in expected.items():
-            reduce_elements = last_reduce * 64
+            reduce_elements = last_reduce * 1_024
             expect(
                 stage,
                 RouteDecision(
@@ -209,9 +209,9 @@ def run_model_checks(stage):
         )
         expect(
             stage,
-            RouteDecision(True, 8, 8, 32, 208),
+            RouteDecision(True, 8, 4, 64, 208),
             **common(
-                input_elements=4_890_624,
+                input_elements=117_374_976,
                 output_elements=50_944,
                 reduce_elements=2_304,
                 last_reduce=3,

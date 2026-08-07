@@ -34,6 +34,9 @@ def main():
     parser.add_argument("--candidate", type=Path, required=True)
     parser.add_argument("--baseline-b", type=Path, required=True)
     parser.add_argument("--minimum-improvement-percent", type=float, default=5.0)
+    parser.add_argument(
+        "--minimum-point-improvement-percent", type=float, default=None
+    )
     parser.add_argument("--maximum-regression-percent", type=float, default=3.0)
     parser.add_argument("--maximum-baseline-drift-percent", type=float, default=3.0)
     parser.add_argument("--output", type=Path, default=None)
@@ -85,22 +88,40 @@ def main():
         for row in rows
     )
     improvement_ok = aggregate_improvement >= args.minimum_improvement_percent
-    passed = drift_ok and regression_ok and improvement_ok
+    minimum_point_improvement = min(
+        row["improvement_percent"] for row in rows
+    )
+    point_improvement_ok = (
+        args.minimum_point_improvement_percent is None
+        or minimum_point_improvement
+        >= args.minimum_point_improvement_percent
+    )
+    passed = (
+        drift_ok
+        and regression_ok
+        and improvement_ok
+        and point_improvement_ok
+    )
 
     report = {
         "schema_version": 1,
         "passed": passed,
         "thresholds": {
             "minimum_improvement_percent": args.minimum_improvement_percent,
+            "minimum_point_improvement_percent": (
+                args.minimum_point_improvement_percent
+            ),
             "maximum_regression_percent": args.maximum_regression_percent,
             "maximum_baseline_drift_percent": args.maximum_baseline_drift_percent,
         },
         "baseline_sum": baseline_sum,
         "candidate_sum": candidate_sum,
         "aggregate_improvement_percent": aggregate_improvement,
+        "minimum_point_improvement_percent": minimum_point_improvement,
         "drift_ok": drift_ok,
         "regression_ok": regression_ok,
         "improvement_ok": improvement_ok,
+        "point_improvement_ok": point_improvement_ok,
         "cases": rows,
     }
     if args.output is not None:
