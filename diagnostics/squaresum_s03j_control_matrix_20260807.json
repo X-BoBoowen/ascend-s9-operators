@@ -1,0 +1,51 @@
+{
+  "schema_version": 1,
+  "dimension_limits_from_spec": {
+    "N": 10000,
+    "N2": 10000,
+    "N3": 1000,
+    "N4": 200
+  },
+  "cases": [
+    {
+      "name": "control_fast1_unaligned",
+      "route": "fast1",
+      "shape": [128, 8191],
+      "axes": [-1],
+      "keep_dims": false,
+      "tier": "s03j_control"
+    },
+    {
+      "name": "control_fast1_scalar",
+      "route": "fast1",
+      "shape": [200, 1000, 20],
+      "axes": [0, 1, 2],
+      "keep_dims": false,
+      "tier": "s03j_control"
+    },
+    {
+      "name": "control_fast1_output8",
+      "route": "fast1",
+      "shape": [8, 1000, 512],
+      "axes": [1, 2],
+      "keep_dims": false,
+      "tier": "s03j_control"
+    },
+    {
+      "name": "control_fast1_output4096",
+      "route": "fast1",
+      "shape": [128, 32, 1024],
+      "axes": [2],
+      "keep_dims": false,
+      "tier": "s03j_control"
+    },
+    {
+      "name": "control_fast4_middle",
+      "route": "fast4",
+      "shape": [64, 64, 128, 32],
+      "axes": [0, 2],
+      "keep_dims": false,
+      "tier": "s03j_control"
+    }
+  ]
+}

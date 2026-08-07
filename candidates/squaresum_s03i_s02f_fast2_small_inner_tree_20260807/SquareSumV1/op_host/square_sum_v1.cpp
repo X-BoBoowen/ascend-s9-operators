@@ -469,7 +469,7 @@ static ge::graphStatus TilingFunc(gert::TilingContext* context)
         groupedVector8
             ? 5U
             : (useTreeFinalize
-                ? (longContiguous ? 4U : 3U)
+                ? (useLongChunk ? 4U : 3U)
                 : (useLongChunk ? 2U : 1U)));
     context->SetBlockDim(blockDim);
     tiling.SaveToBuffer(

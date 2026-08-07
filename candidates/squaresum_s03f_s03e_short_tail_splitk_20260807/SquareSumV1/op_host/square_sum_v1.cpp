@@ -170,13 +170,23 @@ ge::graphStatus BuildMetadata(
             }
         }
         bool contiguousGroup = true;
+        bool hasSingletonGap = false;
         for (uint32_t axis = firstReduced;
              axis <= lastReduced;
              ++axis) {
-            if (!reduced[axis]) {
+            if (!reduced[axis] && inputDims[axis] != 1U) {
                 contiguousGroup = false;
                 break;
             }
+            if (!reduced[axis]) {
+                hasSingletonGap = true;
+            }
+        }
+        if (contiguousGroup &&
+            hasSingletonGap &&
+            lastReduced != rank - 1U &&
+            reduceElements < 8192U) {
+            contiguousGroup = false;
         }
         if (contiguousGroup) {
             fastPath =
@@ -295,13 +305,18 @@ static ge::graphStatus TilingFunc(gert::TilingContext* context)
         1U << 20U;
     constexpr uint64_t TREE_MIDDLE_REDUCE_THRESHOLD =
         1U << 16U;
+    constexpr uint64_t SHORT_TAIL_SPLITK_MIN_REDUCE =
+        1U << 15U;
+    constexpr uint64_t SHORT_TAIL_SPLITK_MIN_ROWS = 40U;
+    constexpr uint64_t SHORT_TAIL_SPLITK_MAX_TAIL = 1023U;
+    constexpr uint64_t SHORT_TAIL_SPLITK_MAX_OUTPUTS = 16U;
     const bool atomicReduce =
         inputDesc->GetDataType() == ge::DT_FLOAT &&
         fastPath == 1 &&
         inputElements >= ATOMIC_REDUCE_INPUT_THRESHOLD &&
         reduceElements >= ATOMIC_REDUCE_MIN_ELEMENTS &&
         outputElements <= ATOMIC_REDUCE_MAX_OUTPUTS;
-    const bool workspaceReduce =
+    bool workspaceReduce =
         inputElements >= WORKSPACE_REDUCE_INPUT_THRESHOLD &&
         reduceElements >= WORKSPACE_REDUCE_MIN_ELEMENTS &&
         ((fastPath == 1 &&
@@ -309,18 +324,12 @@ static ge::graphStatus TilingFunc(gert::TilingContext* context)
           outputElements <= WORKSPACE_LAST_MAX_OUTPUTS) ||
          (fastPath == 2 &&
           outputElements <= WORKSPACE_MIDDLE_MAX_OUTPUTS));
-    const uint32_t reduceMode =
+    uint32_t reduceMode =
         atomicReduce ? 1U : (workspaceReduce ? 2U : 0U);
     const bool longContiguous =
         fastPath == 1 &&
         reduceElements > LONG_CONTIGUOUS_THRESHOLD;
-    const bool longMiddleSmallInner =
-        fastPath == 2 &&
-        reduceElements >= LARGE_MIDDLE_REDUCE_THRESHOLD &&
-        innerElements <= 64U;
-    const bool useLongChunk =
-        longContiguous || longMiddleSmallInner;
-    const bool useTreeFinalize =
+    bool useTreeFinalize =
         workspaceReduce &&
         ((fastPath == 1 &&
           reduceElements >= TREE_LAST_REDUCE_THRESHOLD) ||
@@ -402,6 +411,54 @@ static ge::graphStatus TilingFunc(gert::TilingContext* context)
             vectorSourceGapBytes <=
                 std::numeric_limits<uint32_t>::max();
     }
+    uint64_t splitKNaturalRows = 0U;
+    uint64_t shortTailSplitKCost = 0U;
+    uint64_t doubledShortTailSplitKCost = 0U;
+    const bool noncontiguousShortTailSplitK =
+        fastPath == 3U &&
+        reduceMode == 0U &&
+        inputElements >= WORKSPACE_REDUCE_INPUT_THRESHOLD &&
+        reduceElements >= SHORT_TAIL_SPLITK_MIN_REDUCE &&
+        outputElements > 0U &&
+        outputElements <= SHORT_TAIL_SPLITK_MAX_OUTPUTS &&
+        trailingReduceElements > 0U &&
+        trailingReduceElements <= SHORT_TAIL_SPLITK_MAX_TAIL &&
+        firstTrailingAxis > 0U &&
+        firstTrailingAxis < reduceRank &&
+        expectedTrailingStride == trailingReduceElements &&
+        (splitKNaturalRows =
+             reduceElements / trailingReduceElements) >=
+            SHORT_TAIL_SPLITK_MIN_ROWS &&
+        SafeMultiply(
+            (splitKNaturalRows + MAX_BLOCK_DIM - 1U) /
+                MAX_BLOCK_DIM,
+            outputElements,
+            shortTailSplitKCost) &&
+        SafeMultiply(
+            shortTailSplitKCost,
+            2U,
+            doubledShortTailSplitKCost) &&
+        splitKNaturalRows >= doubledShortTailSplitKCost;
+    if (noncontiguousShortTailSplitK) {
+        workspaceReduce = true;
+        reduceMode = 3U;
+        useTreeFinalize = true;
+    }
+    constexpr uint64_t GENERAL_STRIDED_MAX_OUTPUTS = 1024U;
+    const bool generalStridedSplitK =
+        fastPath == 4U &&
+        reduceMode == 0U &&
+        inputElements >= WORKSPACE_REDUCE_INPUT_THRESHOLD &&
+        reduceElements >= WORKSPACE_REDUCE_MIN_ELEMENTS &&
+        outputElements > 0U &&
+        outputElements <= GENERAL_STRIDED_MAX_OUTPUTS &&
+        innerElements > 0U &&
+        outputElements % innerElements == 0U;
+    if (generalStridedSplitK) {
+        workspaceReduce = true;
+        reduceMode = 3U;
+        useTreeFinalize = true;
+    }
     uint64_t desiredBlocks = 0;
     if (reduceMode != 0U) {
         desiredBlocks = MAX_BLOCK_DIM;
@@ -470,7 +527,7 @@ static ge::graphStatus TilingFunc(gert::TilingContext* context)
             ? 5U
             : (useTreeFinalize
                 ? (longContiguous ? 4U : 3U)
-                : (useLongChunk ? 2U : 1U)));
+                : (longContiguous ? 2U : 1U)));
     context->SetBlockDim(blockDim);
     tiling.SaveToBuffer(
         context->GetRawTilingData()->GetData(),

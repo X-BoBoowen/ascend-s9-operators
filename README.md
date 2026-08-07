@@ -20,12 +20,15 @@
 > 当前阶段：完整正式记录复核后确认真正的历史最好是 S02F
 > `3223.995 μs`，不是后续文档误写的 S02CA `3982.569 μs`。S02F 的
 > Case1～Case5 为 `6.530 / 394.308 / 237.885 / 1716.7145 /
-> 868.5575 μs`。S03B 的通用 Split-K 与 S03D 的 singleton-gap 路由已经
-> 合并为 S03E，并在 910B4/CANN 8.5.0 完成隔离构建、`126/126` 正确性
-> 和 A/B/A：两个覆盖域分别改善 `86.7365%` 与 `84.5746%`。当前
-> `submission-src/SquareSumV1` 已提升为 S03E，上传包已生成，但尚无平台
-> 隐藏 Case 成绩。完整证据见
-> [`SQUARESUM_S03E_CLOUD_GATE_20260807.md`](./SQUARESUM_S03E_CLOUD_GATE_20260807.md)。
+> 868.5575 μs`。S03E 在公开覆盖域的真机门禁虽通过，但正式平台结果为
+> `6.540 / 394.3775 / 238.865 / 1718.6145 / 902.268 μs`，合计
+> `3260.665 μs`，比 S02F 慢 `36.670 μs（1.1374%）`，其中 Case5
+> 贡献 `33.7105 μs` 回退。因此 S03E 已正式否决。新的 S03J 从 S02F
+> 重新出发，仅移植 `fastPath2` 长归约、小 inner 的通用优化，并保留
+> S02F 的 `fastPath3`。它已通过 1061/1061 正确性，目标六点 A/B/A
+> 聚合改善 34.1427%，现已写入 `submission-src/SquareSumV1` 并打包，
+> 但尚无正式平台成绩。完整记录见
+> [`SQUARESUM_S03J_CLOUD_GATE_20260807.md`](./SQUARESUM_S03J_CLOUD_GATE_20260807.md)。
 
 下一轮完整执行方案见
 [`OPTIMIZATION_PLAN_20260730.md`](./OPTIMIZATION_PLAN_20260730.md)。
@@ -40,7 +43,7 @@
 | Greater | 本轮完成 | 26 定向 + 220 随机 + 9 个 int32 扩展；扩展集连续复跑 3 次 | 已生成并审计 | 5/5 Pass，18595.372 |
 | IndexAdd | 本轮完成 | 23 定向 + 170 随机 + 345 扩展 = 538 | 已生成并审计 | 5/5 Pass，119427.8755 |
 | Transpose | 本轮完成 | 48 定向 + 200 随机 + 152 扩展 + 84 边界 = 484 | 已生成并审计 | 5/5 Pass，16303.227 |
-| SquareSumV1 | S03E（S03B Split-K + S03D singleton-gap）已提升到提交源码 | 组合正确性 126/126；两域 A/B/A 改善 86.7365% / 84.5746% | `20260807/S03E/SquareSumV1.zip` 已生成并审计 | 待平台；正式最好仍为 S02F 3223.995 |
+| SquareSumV1 | S03J：S02F + fastPath2 长归约小-inner 安全优化 | 全量与新增边界 1061/1061 | S03J 已生成并审计，等待上传 | 正式最好仍为 S02F 3223.995；S03J 待评测 |
 
 这里的“本轮完成”表示：
 
@@ -64,7 +67,7 @@ D:\29722\Desktop\GCC\提交相关材料\
 |-- Greater.zip
 |-- IndexAdd.zip
 |-- Transpose.zip
-`-- 20260807/S03E/SquareSumV1.zip
+`-- 20260807/S03J/SquareSumV1.zip
 ```
 
 | 文件 | 大小 | SHA-256 |
@@ -73,7 +76,7 @@ D:\29722\Desktop\GCC\提交相关材料\
 | `Greater.zip` | 398168 B | `316797810d06b57d18c898d1fe449c1b0b51565c6a842845dded75524f7f868d` |
 | `IndexAdd.zip` | 417920 B | `cf8c08a60d3b356686a07e136766dd06128afa87dccf67d9c9940330843d990b` |
 | `Transpose.zip` | 401378 B | `52850235386690dcd89bf0fff039a4e510345a725aa2616d5f2a7c4d4fb5f1d0` |
-| `20260807/S03E/SquareSumV1.zip` | 483639 B | `dd4b22bc7eb5000c07357bd9d2355bb6b8e7bdf9e61cb7e8fb4fb3a5196f19b2` |
+| `20260807/S03J/SquareSumV1.zip` | 474641 B | `e775b0889148ae5fe4c1d6dd678db90515bbe5c3eba3da894625d96308d17818` |
 
 包内 `.run`：
 
@@ -83,7 +86,7 @@ D:\29722\Desktop\GCC\提交相关材料\
 | Greater | `d8ab6f81aa1eaa775cbe69078db09901037ccad667216697371475a42dbb4298` |
 | IndexAdd | `58a5be8bbbc8db62708973fea21bd6630e1d938ae9c8a4ad28132f3014ce679d` |
 | Transpose | `2baf9ecb7e38716b5d4a7ca8e89c890be2392c4b8c9352d8ca67d8d23ca9a9af` |
-| SquareSumV1 | `e0c065ea9cee4b7720e563856ea15292e23d3c59e561b8d4ecb577f5a7ee2719` |
+| SquareSumV1 | `4215edfd68bdb626f516dc3d6aa662065fe4e4eb24497311841818987722abc1` |
 
 五个 ZIP 均只有一个顶层 `<Operator>_zip/`，包含 `op_host/`、
 `op_kernel/` 和一个非空 `custom_opp_euleros_aarch64.run`。
@@ -1386,6 +1389,31 @@ S02CS 与 S02CT 的 Kernel 都与正式 S02CA 字节一致。本地公开维度�
 910B/CANN 8.5.0 构建或计时，详细边界和云端 A/B/A 门禁见对应审计文档。
 四个候选均禁止直接打包提交。
 
+### 12.26 SquareSumV1-S03J fastPath2 小-inner 安全候选
+
+S03E 正式回退后重新以 S02F 为基线做版本消融。S02AY 相对 S02F 的真机
+对比表明，`fastPath2` 的 inner=2/8 路径改善约 24%～42%，而同版本
+`fastPath3` rank-4 路径回退 40%～53%；这与 S02BA 正式 Case3 改善、
+Case4 大幅回退的方向相符。S03J 因此只保留前一类通用优化，不移植
+`fastPath3` 改动。
+
+S03H、S03I 两轮消融首先暴露 FP32 long-key finalizer 缓冲区不足；S03J
+将其修正为 4096 B，并让 workspace tree 保持 S02F 原有 key。最终通过
+全量与新增边界 `1061/1061`，目标六点 A/B/A 聚合改善 `34.1427%`，
+未修改控制路径复测最坏回退 `2.3903%`。包已完成 9 条目、单顶层目录、
+源码哈希和 `.run` 0755 权限审计；正式成绩仍待平台返回。
+
+```text
+SQUARESUM_S03J_CLOUD_GATE_20260807.md
+
+D:\29722\Desktop\GCC\提交相关材料\20260807\S03J\SquareSumV1.zip
+大小：474641 bytes
+ZIP SHA-256：
+E775B0889148AE5FE4C1D6DD678DB90515BBE5C3EBA3DA894625D96308D17818
+RUN SHA-256：
+4215EDFD68BDB626F516DC3D6AA662065FE4E4EB24497311841818987722ABC1
+```
+
 ## 13. 安全与仓库卫生
 
 禁止提交：
@@ -1404,20 +1432,15 @@ git ls-files | grep -Ei '\.(pem|key|run|so|whl|zip)$'
 
 ## 14. 结论边界
 
-当前能够确认的是：S02CA 的 `3982.569 μs` 是正式最好结果；S02CN 为
-`4010.864 μs`，已淘汰。此前 Event 图谱不等价于官方 `msprof` 评分口径，
-并且部分 shape 超出题面维度上限。S02CQ、S02CR、S02CS 与 S02CT 是复核
-后建立的四个独立本地候选；它们分别处理 BF16 中间量化、fastPath4 通用
-低并行度、fastPath3 短连续尾段，以及 fastPath1 输出 9～16 的低并行度。
-四者均尚无 910B 构建、正确性或性能结果，禁止打包提交。
+当前能够确认的是：S02F 的 `3223.995 μs` 是正式最好结果；S03E 为
+`3260.665 μs`，已淘汰。此前 Event 图谱不等价于官方评分口径，局部巨大
+收益也不能替代正式五 Case。S03J 是当前唯一推荐提交的新候选：它从
+S02F 独立重建，通过 1061/1061 正确性，并在修改目标域取得 34.1427%
+聚合改善；源码、已验证 `.run` 与 ZIP 已固定，但尚无正式平台成绩。
 
 当前不能确认的是：隐藏 Case 的具体 shape/dtype/TilingKey。后续优化必须
 继续依据通用布局、公开矩阵和真机 profiling，不得把平台 Case 当作可猜测
 或可硬编码的数据；
-只有官方五项结果可以证明是否达到 `0.30 × T_baseline`。下一次云端优先
-执行 `diagnostics/run_squaresum_s02cr_cloud_gate_20260806.sh`，随后执行
-`diagnostics/run_squaresum_s02ct_cloud_gate_20260806.sh` 与
-`diagnostics/run_squaresum_s02cs_cloud_gate_20260806.sh`，最后独立执行
-S02CQ。所有门禁都要求同机隔离 A→B→A、单点回退不超过 3%、基线漂移
-不超过 3%；三个结构候选先以 Event 做 10% 快速淘汰，再进入昂贵的官方
-兼容 msprof；目标矩阵总改善门槛为 10%，S02CQ 为 5%。
+只有官方五项结果可以证明是否达到 `0.30 × T_baseline`。下一步先提交
+S03J 并逐 Case 对照 S02F；若目标路径没有映射到正式耗时，应回滚 S02F，
+继续做通用路径归因，不得靠扩大阈值或叠加未证实改动碰运气。

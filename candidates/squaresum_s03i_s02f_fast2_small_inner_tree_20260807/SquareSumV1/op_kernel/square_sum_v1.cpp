@@ -150,7 +150,7 @@ public:
             floatBuffer_,
             std::is_same<T, float>::value &&
                     CHUNK == LONG_CHUNK
-                ? TILE_OUTPUTS * sizeof(float)
+                ? 32U
                 : CHUNK * sizeof(float));
         pipe_.InitBuffer(
             reduceWorkBuffer_,

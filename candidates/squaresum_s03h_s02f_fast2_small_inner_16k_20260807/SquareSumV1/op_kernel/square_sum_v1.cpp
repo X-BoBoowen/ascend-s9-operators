@@ -150,7 +150,7 @@ public:
             floatBuffer_,
             std::is_same<T, float>::value &&
                     CHUNK == LONG_CHUNK
-                ? TILE_OUTPUTS * sizeof(float)
+                ? 32U
                 : CHUNK * sizeof(float));
         pipe_.InitBuffer(
             reduceWorkBuffer_,
@@ -405,8 +405,11 @@ private:
             if (reduceRowsPerTile > 4095U) {
                 reduceRowsPerTile = 4095U;
             }
-            reduceRowsPerTile =
-                HighestPowerOfTwo(reduceRowsPerTile);
+
+            AscendC::Duplicate(
+                accumulateLocal,
+                0.0f,
+                floatPadded);
             uint64_t reduceOffset = 0;
             while (reduceOffset < reduceCount) {
                 const uint32_t remainingRows =
@@ -416,16 +419,9 @@ private:
                             ? reduceCount - reduceOffset
                             : reduceRowsPerTile);
                 const uint32_t currentReduceRows =
-                    remainingRows;
-                uint32_t reductionRows = 1U;
-                while (reductionRows < currentReduceRows) {
-                    reductionRows <<= 1U;
-                }
+                    HighestPowerOfTwo(remainingRows);
                 const uint32_t inputCount =
                     currentReduceRows * paddedInner;
-                const uint32_t paddedRowElements =
-                    (reductionRows - currentReduceRows) *
-                    paddedInner;
                 const uint64_t inputStart =
                     (outerIndex * reduceElements_ +
                      reduceStart + reduceOffset) *
@@ -468,19 +464,12 @@ private:
                         inputLocal,
                         inputLocal,
                         inputCount);
-                    if (paddedRowElements != 0U) {
-                        AscendC::Duplicate(
-                            inputLocal[inputCount],
-                            0.0f,
-                            paddedRowElements);
-                    }
                     ReduceRowsInto(
                         inputLocal,
                         accumulateLocal,
-                        reductionRows,
+                        currentReduceRows,
                         paddedInner,
-                        floatPadded,
-                        reduceOffset == 0U);
+                        floatPadded);
                 } else if constexpr (
                     std::is_same<T, half>::value) {
                     AscendC::Mul(
@@ -493,19 +482,12 @@ private:
                         inputLocal,
                         AscendC::RoundMode::CAST_NONE,
                         inputCount);
-                    if (paddedRowElements != 0U) {
-                        AscendC::Duplicate(
-                            valueLocal[inputCount],
-                            0.0f,
-                            paddedRowElements);
-                    }
                     ReduceRowsInto(
                         valueLocal,
                         accumulateLocal,
-                        reductionRows,
+                        currentReduceRows,
                         paddedInner,
-                        floatPadded,
-                        reduceOffset == 0U);
+                        floatPadded);
                 } else {
                     AscendC::Cast(
                         valueLocal,
@@ -527,30 +509,19 @@ private:
                         inputLocal,
                         AscendC::RoundMode::CAST_NONE,
                         inputCount);
-                    if (paddedRowElements != 0U) {
-                        AscendC::Duplicate(
-                            valueLocal[inputCount],
-                            0.0f,
-                            paddedRowElements);
-                    }
                     ReduceRowsInto(
                         valueLocal,
                         accumulateLocal,
-                        reductionRows,
+                        currentReduceRows,
                         paddedInner,
-                        floatPadded,
-                        reduceOffset == 0U);
+                        floatPadded);
                 }
-                if (reduceOffset + currentReduceRows <
-                        reduceCount ||
-                    outputIndex + current < outputElements_) {
-                    AscendC::SetFlag<
-                        AscendC::HardEvent::V_MTE2>(
-                        vToMte2Event_);
-                    AscendC::WaitFlag<
-                        AscendC::HardEvent::V_MTE2>(
-                        vToMte2Event_);
-                }
+                AscendC::SetFlag<
+                    AscendC::HardEvent::V_MTE2>(
+                    vToMte2Event_);
+                AscendC::WaitFlag<
+                    AscendC::HardEvent::V_MTE2>(
+                    vToMte2Event_);
                 reduceOffset += currentReduceRows;
             }
 
@@ -1885,10 +1856,12 @@ private:
         return result;
     }
 
-    __aicore__ inline void ReduceRowsInPlace(
+    __aicore__ inline void ReduceRowsInto(
         AscendC::LocalTensor<float> values,
+        AscendC::LocalTensor<float> accumulate,
         const uint32_t rows,
-        const uint32_t paddedInner)
+        const uint32_t paddedInner,
+        const uint32_t floatPadded)
     {
         for (uint32_t activeRows = rows;
              activeRows > 1U;
@@ -1900,45 +1873,11 @@ private:
                 values[halfRows * paddedInner],
                 halfRows * paddedInner);
         }
-    }
-
-    __aicore__ inline void ReduceRowsInto(
-        AscendC::LocalTensor<float> values,
-        AscendC::LocalTensor<float> accumulate,
-        const uint32_t rows,
-        const uint32_t paddedInner,
-        const uint32_t floatPadded)
-    {
-        ReduceRowsInPlace(values, rows, paddedInner);
         AscendC::Add(
             accumulate,
             accumulate,
             values,
             floatPadded);
-    }
-
-    __aicore__ inline void ReduceRowsInto(
-        AscendC::LocalTensor<float> values,
-        AscendC::LocalTensor<float> accumulate,
-        const uint32_t rows,
-        const uint32_t paddedInner,
-        const uint32_t floatPadded,
-        const bool initialize)
-    {
-        ReduceRowsInPlace(values, rows, paddedInner);
-        if (initialize) {
-            AscendC::Adds(
-                accumulate,
-                values,
-                0.0f,
-                floatPadded);
-        } else {
-            AscendC::Add(
-                accumulate,
-                accumulate,
-                values,
-                floatPadded);
-        }
     }
 
     __aicore__ inline void ProcessMiddleContiguous()
@@ -1986,8 +1925,11 @@ private:
             if (reduceRowsPerTile > 4095U) {
                 reduceRowsPerTile = 4095U;
             }
-            reduceRowsPerTile =
-                HighestPowerOfTwo(reduceRowsPerTile);
+
+            AscendC::Duplicate(
+                accumulateLocal,
+                0.0f,
+                floatPadded);
             uint64_t reduceOffset = 0;
             while (reduceOffset < reduceElements_) {
                 const uint32_t remainingRows =
@@ -1997,16 +1939,9 @@ private:
                             ? reduceElements_ - reduceOffset
                             : reduceRowsPerTile);
                 const uint32_t currentReduceRows =
-                    remainingRows;
-                uint32_t reductionRows = 1U;
-                while (reductionRows < currentReduceRows) {
-                    reductionRows <<= 1U;
-                }
+                    HighestPowerOfTwo(remainingRows);
                 const uint32_t inputCount =
                     currentReduceRows * paddedInner;
-                const uint32_t paddedRowElements =
-                    (reductionRows - currentReduceRows) *
-                    paddedInner;
                 const uint64_t inputStart =
                     (outerIndex * reduceElements_ +
                      reduceOffset) *
@@ -2050,19 +1985,12 @@ private:
                         inputLocal,
                         inputLocal,
                         inputCount);
-                    if (paddedRowElements != 0U) {
-                        AscendC::Duplicate(
-                            inputLocal[inputCount],
-                            0.0f,
-                            paddedRowElements);
-                    }
                     ReduceRowsInto(
                         inputLocal,
                         accumulateLocal,
-                        reductionRows,
+                        currentReduceRows,
                         paddedInner,
-                        floatPadded,
-                        reduceOffset == 0U);
+                        floatPadded);
                 } else if constexpr (
                     std::is_same<T, half>::value) {
                     AscendC::Mul(
@@ -2075,19 +2003,12 @@ private:
                         inputLocal,
                         AscendC::RoundMode::CAST_NONE,
                         inputCount);
-                    if (paddedRowElements != 0U) {
-                        AscendC::Duplicate(
-                            valueLocal[inputCount],
-                            0.0f,
-                            paddedRowElements);
-                    }
                     ReduceRowsInto(
                         valueLocal,
                         accumulateLocal,
-                        reductionRows,
+                        currentReduceRows,
                         paddedInner,
-                        floatPadded,
-                        reduceOffset == 0U);
+                        floatPadded);
                 } else {
                     AscendC::Cast(
                         valueLocal,
@@ -2109,30 +2030,19 @@ private:
                         inputLocal,
                         AscendC::RoundMode::CAST_NONE,
                         inputCount);
-                    if (paddedRowElements != 0U) {
-                        AscendC::Duplicate(
-                            valueLocal[inputCount],
-                            0.0f,
-                            paddedRowElements);
-                    }
                     ReduceRowsInto(
                         valueLocal,
                         accumulateLocal,
-                        reductionRows,
+                        currentReduceRows,
                         paddedInner,
-                        floatPadded,
-                        reduceOffset == 0U);
+                        floatPadded);
                 }
-                if (reduceOffset + currentReduceRows <
-                        reduceElements_ ||
-                    processed + current < outputs_) {
-                    AscendC::SetFlag<
-                        AscendC::HardEvent::V_MTE2>(
-                        vToMte2Event_);
-                    AscendC::WaitFlag<
-                        AscendC::HardEvent::V_MTE2>(
-                        vToMte2Event_);
-                }
+                AscendC::SetFlag<
+                    AscendC::HardEvent::V_MTE2>(
+                    vToMte2Event_);
+                AscendC::WaitFlag<
+                    AscendC::HardEvent::V_MTE2>(
+                    vToMte2Event_);
                 reduceOffset += currentReduceRows;
             }
 
