@@ -77,7 +77,8 @@ template <
     typename T,
     uint32_t CHUNK,
     bool TREE_FINALIZE,
-    bool GROUPED_VECTOR8>
+    bool GROUPED_VECTOR8,
+    bool STRIDED_GROUPED_ROWS = false>
 class KernelSquareSumV1 {
 public:
     __aicore__ inline KernelSquareSumV1() {}
@@ -177,6 +178,10 @@ public:
 
     __aicore__ inline void Process()
     {
+        if constexpr (STRIDED_GROUPED_ROWS) {
+            ProcessStridedGroupedRows();
+            return;
+        }
         if (reduceMode_ == 2U) {
             ProcessParallelReduction();
             return;
@@ -870,6 +875,270 @@ private:
                 mte3ToSEvent_);
             AscendC::WaitFlag<AscendC::HardEvent::MTE3_S>(
                 mte3ToSEvent_);
+        }
+    }
+
+    __aicore__ inline void ProcessStridedGroupedRows()
+    {
+        constexpr uint32_t MAX_WIDTH = 8U;
+        constexpr uint64_t MIN_TASKS = 32U;
+        AscendC::LocalTensor<T> inputLocal =
+            inputBuffer_.Get<T>();
+        AscendC::LocalTensor<T> outputLocal =
+            outputBuffer_.Get<T>();
+        AscendC::LocalTensor<float> valueLocal =
+            floatBuffer_.Get<float>();
+        AscendC::LocalTensor<float> accumulateLocal =
+            reduceWorkBuffer_.Get<float>();
+
+        const uint32_t lastReduceAxis =
+            reduceRank_ - 1U;
+        const uint32_t lastReduceDim =
+            static_cast<uint32_t>(
+                reduceDims_[lastReduceAxis]);
+        const uint32_t inner =
+            static_cast<uint32_t>(innerElements_);
+        const uint32_t rowElements =
+            lastReduceDim * inner;
+        uint32_t groupedOutputAxis = outputRank_;
+        for (int32_t axis =
+                 static_cast<int32_t>(outputRank_) - 1;
+             axis >= 0;
+             --axis) {
+            if (outputDims_[axis] > 1U &&
+                outputInputStrides_[axis] == rowElements) {
+                groupedOutputAxis =
+                    static_cast<uint32_t>(axis);
+                break;
+            }
+        }
+        const uint64_t groupedOutputDim =
+            outputDims_[groupedOutputAxis];
+        const uint64_t groupedOutputElements =
+            groupedOutputDim * innerElements_;
+        const uint64_t outerOutputRows =
+            outputElements_ / groupedOutputElements;
+        uint32_t groupedWidth = 0U;
+        uint64_t tasksPerOuter = 0U;
+        for (uint32_t width = MAX_WIDTH;
+             width >= 2U;
+             width >>= 1U) {
+            const uint64_t candidateTasksPerOuter =
+                (groupedOutputDim + width - 1U) / width;
+            const uint64_t candidateTasks =
+                outerOutputRows * candidateTasksPerOuter;
+            if (groupedOutputDim >= width &&
+                static_cast<uint64_t>(width) *
+                        rowElements <= CHUNK &&
+                static_cast<uint64_t>(width) * inner <=
+                        TILE_OUTPUTS &&
+                candidateTasks >= MIN_TASKS) {
+                groupedWidth = width;
+                tasksPerOuter = candidateTasksPerOuter;
+                break;
+            }
+        }
+        if (groupedWidth == 0U) {
+            return;
+        }
+
+        const uint64_t outerReduceGroups =
+            reduceElements_ / lastReduceDim;
+        AscendC::DataCopyExtParams copyParams;
+        copyParams.blockCount = 1U;
+        copyParams.srcStride = 0U;
+        copyParams.dstStride = 0U;
+        AscendC::DataCopyPadExtParams<T> padParams;
+        padParams.isPad = false;
+        padParams.leftPadding = 0U;
+        padParams.rightPadding = 0U;
+        const T zero = {};
+        padParams.paddingValue = zero;
+
+        for (uint64_t taskOffset = 0U;
+             taskOffset < outputs_;
+             ++taskOffset) {
+            const uint64_t taskIndex =
+                firstOutput_ + taskOffset;
+            const uint64_t outerOutputRow =
+                taskIndex / tasksPerOuter;
+            const uint64_t taskInOuter =
+                taskIndex % tasksPerOuter;
+            const uint64_t firstGroupedRow =
+                taskInOuter * groupedWidth;
+            const uint32_t activeRows =
+                static_cast<uint32_t>(
+                    groupedOutputDim - firstGroupedRow <
+                            groupedWidth
+                        ? groupedOutputDim - firstGroupedRow
+                        : groupedWidth);
+            const uint64_t outputStart =
+                outerOutputRow * groupedOutputElements +
+                firstGroupedRow * innerElements_;
+            const uint64_t baseInputOffset =
+                BaseInputOffset(outputStart);
+            const uint32_t inputCount =
+                activeRows * rowElements;
+            const uint32_t outputCount =
+                activeRows * inner;
+            AscendC::Duplicate(
+                accumulateLocal,
+                0.0f,
+                outputCount);
+
+            for (uint64_t group = 0U;
+                 group < outerReduceGroups;
+                 ++group) {
+                const uint64_t inputStart =
+                    baseInputOffset +
+                    ReduceInputOffset(
+                        group * lastReduceDim);
+                copyParams.blockLen =
+                    inputCount * sizeof(T);
+                AscendC::DataCopyPad(
+                    inputLocal,
+                    inputGm_[inputStart],
+                    copyParams,
+                    padParams);
+                AscendC::SetFlag<
+                    AscendC::HardEvent::MTE2_V>(
+                    mte2ToVEvent_);
+                AscendC::WaitFlag<
+                    AscendC::HardEvent::MTE2_V>(
+                    mte2ToVEvent_);
+
+                if constexpr (
+                    std::is_same<T, float>::value) {
+                    AscendC::Mul(
+                        inputLocal,
+                        inputLocal,
+                        inputLocal,
+                        inputCount);
+                    for (uint32_t row = 0U;
+                         row < activeRows;
+                         ++row) {
+                        AscendC::LocalTensor<float> rowValues =
+                            inputLocal[row * rowElements];
+                        ReduceRowsInPlace(
+                            rowValues,
+                            lastReduceDim,
+                            inner);
+                        AscendC::Add(
+                            accumulateLocal[row * inner],
+                            accumulateLocal[row * inner],
+                            rowValues,
+                            inner);
+                    }
+                } else if constexpr (
+                    std::is_same<T, half>::value) {
+                    AscendC::Mul(
+                        inputLocal,
+                        inputLocal,
+                        inputLocal,
+                        inputCount);
+                    AscendC::Cast(
+                        valueLocal,
+                        inputLocal,
+                        AscendC::RoundMode::CAST_NONE,
+                        inputCount);
+                    for (uint32_t row = 0U;
+                         row < activeRows;
+                         ++row) {
+                        AscendC::LocalTensor<float> rowValues =
+                            valueLocal[row * rowElements];
+                        ReduceRowsInPlace(
+                            rowValues,
+                            lastReduceDim,
+                            inner);
+                        AscendC::Add(
+                            accumulateLocal[row * inner],
+                            accumulateLocal[row * inner],
+                            rowValues,
+                            inner);
+                    }
+                } else {
+                    AscendC::Cast(
+                        valueLocal,
+                        inputLocal,
+                        AscendC::RoundMode::CAST_NONE,
+                        inputCount);
+                    AscendC::Mul(
+                        valueLocal,
+                        valueLocal,
+                        valueLocal,
+                        inputCount);
+                    AscendC::Cast(
+                        inputLocal,
+                        valueLocal,
+                        AscendC::RoundMode::CAST_RINT,
+                        inputCount);
+                    AscendC::Cast(
+                        valueLocal,
+                        inputLocal,
+                        AscendC::RoundMode::CAST_NONE,
+                        inputCount);
+                    for (uint32_t row = 0U;
+                         row < activeRows;
+                         ++row) {
+                        AscendC::LocalTensor<float> rowValues =
+                            valueLocal[row * rowElements];
+                        ReduceRowsInPlace(
+                            rowValues,
+                            lastReduceDim,
+                            inner);
+                        AscendC::Add(
+                            accumulateLocal[row * inner],
+                            accumulateLocal[row * inner],
+                            rowValues,
+                            inner);
+                    }
+                }
+                AscendC::SetFlag<
+                    AscendC::HardEvent::V_MTE2>(
+                    vToMte2Event_);
+                AscendC::WaitFlag<
+                    AscendC::HardEvent::V_MTE2>(
+                    vToMte2Event_);
+            }
+
+            if constexpr (
+                std::is_same<T, float>::value) {
+                AscendC::Adds(
+                    outputLocal,
+                    accumulateLocal,
+                    0.0f,
+                    outputCount);
+            } else if constexpr (
+                std::is_same<T, half>::value) {
+                AscendC::Cast(
+                    outputLocal,
+                    accumulateLocal,
+                    AscendC::RoundMode::CAST_NONE,
+                    outputCount);
+            } else {
+                AscendC::Cast(
+                    outputLocal,
+                    accumulateLocal,
+                    AscendC::RoundMode::CAST_RINT,
+                    outputCount);
+            }
+            AscendC::SetFlag<AscendC::HardEvent::V_MTE3>(
+                vToMte3Event_);
+            AscendC::WaitFlag<AscendC::HardEvent::V_MTE3>(
+                vToMte3Event_);
+            AscendC::DataCopyExtParams outputCopy;
+            outputCopy.blockCount = 1U;
+            outputCopy.blockLen = outputCount * sizeof(T);
+            outputCopy.srcStride = 0U;
+            outputCopy.dstStride = 0U;
+            AscendC::DataCopyPad(
+                outputGm_[outputStart],
+                outputLocal,
+                outputCopy);
+            AscendC::SetFlag<AscendC::HardEvent::MTE3_V>(
+                mte3ToVEvent_);
+            AscendC::WaitFlag<AscendC::HardEvent::MTE3_V>(
+                mte3ToVEvent_);
         }
     }
 
@@ -1856,12 +2125,10 @@ private:
         return result;
     }
 
-    __aicore__ inline void ReduceRowsInto(
+    __aicore__ inline void ReduceRowsInPlace(
         AscendC::LocalTensor<float> values,
-        AscendC::LocalTensor<float> accumulate,
         const uint32_t rows,
-        const uint32_t paddedInner,
-        const uint32_t floatPadded)
+        const uint32_t paddedInner)
     {
         for (uint32_t activeRows = rows;
              activeRows > 1U;
@@ -1873,6 +2140,16 @@ private:
                 values[halfRows * paddedInner],
                 halfRows * paddedInner);
         }
+    }
+
+    __aicore__ inline void ReduceRowsInto(
+        AscendC::LocalTensor<float> values,
+        AscendC::LocalTensor<float> accumulate,
+        const uint32_t rows,
+        const uint32_t paddedInner,
+        const uint32_t floatPadded)
+    {
+        ReduceRowsInPlace(values, rows, paddedInner);
         AscendC::Add(
             accumulate,
             accumulate,
@@ -2542,6 +2819,19 @@ extern "C" __global__ __aicore__ void square_sum_v1(
             false,
             true> op;
         op.Init(input, output, userWorkspace, tilingData);
+        op.Process();
+    } else if (TILING_KEY_IS(7)) {
+        GET_TILING_DATA(tilingData, tiling);
+        if (tilingData.outputElements == 0) {
+            return;
+        }
+        KernelSquareSumV1<
+            DTYPE_INPUT,
+            NORMAL_CHUNK,
+            false,
+            false,
+            true> op;
+        op.Init(input, output, workspace, tilingData);
         op.Process();
     }
 }

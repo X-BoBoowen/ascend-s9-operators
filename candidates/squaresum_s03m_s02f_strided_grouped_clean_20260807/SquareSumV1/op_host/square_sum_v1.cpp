@@ -396,8 +396,106 @@ static ge::graphStatus TilingFunc(gert::TilingContext* context)
             vectorSourceGapBytes <=
                 std::numeric_limits<uint32_t>::max();
     }
+    constexpr uint64_t STRIDED_GROUPED_MIN_INPUT = 1U << 20U;
+    constexpr uint64_t STRIDED_GROUPED_MIN_REDUCE = 2048U;
+    constexpr uint64_t STRIDED_GROUPED_MIN_TASKS = 32U;
+    constexpr uint64_t STRIDED_GROUPED_MAX_WIDTH = 8U;
+    constexpr uint64_t NORMAL_CHUNK_ELEMENTS = 8192U;
+    constexpr uint64_t TILE_OUTPUT_ELEMENTS = 1024U;
+    uint64_t stridedGroupedTasks = 0U;
+    bool stridedGroupedRows = false;
+    if (fastPath == 4U &&
+        reduceMode == 0U &&
+        inputElements >= STRIDED_GROUPED_MIN_INPUT &&
+        reduceElements >= STRIDED_GROUPED_MIN_REDUCE &&
+        reduceRank > 1U &&
+        innerElements > 0U &&
+        innerElements % 8U == 0U &&
+        outputElements % innerElements == 0U &&
+        reduceInputStrides[reduceRank - 1U] == innerElements) {
+        const uint64_t lastReduceDim =
+            reduceDims[reduceRank - 1U];
+        uint64_t rowElements = 0U;
+        if (lastReduceDim > 1U &&
+            (lastReduceDim & (lastReduceDim - 1U)) == 0U &&
+            reduceElements % lastReduceDim == 0U &&
+            SafeMultiply(
+                lastReduceDim,
+                innerElements,
+                rowElements) &&
+            rowElements <= NORMAL_CHUNK_ELEMENTS) {
+            uint32_t groupedOutputAxis = outputRank;
+            for (int32_t axis =
+                     static_cast<int32_t>(outputRank) - 1;
+                 axis >= 0;
+                 --axis) {
+                if (outputDims[axis] > 1U &&
+                    outputInputStrides[axis] == rowElements) {
+                    groupedOutputAxis =
+                        static_cast<uint32_t>(axis);
+                    break;
+                }
+            }
+            if (groupedOutputAxis < outputRank) {
+                const uint64_t groupedOutputDim =
+                    outputDims[groupedOutputAxis];
+                uint64_t groupedOutputElements = 0U;
+                if (SafeMultiply(
+                        groupedOutputDim,
+                        innerElements,
+                        groupedOutputElements) &&
+                    groupedOutputElements > 0U &&
+                    outputElements % groupedOutputElements == 0U) {
+                    const uint64_t outerOutputRows =
+                        outputElements / groupedOutputElements;
+                    for (uint64_t width =
+                             STRIDED_GROUPED_MAX_WIDTH;
+                         width >= 2U;
+                         width >>= 1U) {
+                        uint64_t bufferElements = 0U;
+                        uint64_t outputElementsPerTask = 0U;
+                        uint64_t tasksPerOuter = 0U;
+                        uint64_t candidateTasks = 0U;
+                        if (groupedOutputDim < width ||
+                            !SafeMultiply(
+                                width,
+                                rowElements,
+                                bufferElements) ||
+                            bufferElements > NORMAL_CHUNK_ELEMENTS ||
+                            !SafeMultiply(
+                                width,
+                                innerElements,
+                                outputElementsPerTask) ||
+                            outputElementsPerTask >
+                                TILE_OUTPUT_ELEMENTS) {
+                            continue;
+                        }
+                        tasksPerOuter =
+                            (groupedOutputDim + width - 1U) /
+                            width;
+                        if (!SafeMultiply(
+                                outerOutputRows,
+                                tasksPerOuter,
+                                candidateTasks) ||
+                            candidateTasks <
+                                STRIDED_GROUPED_MIN_TASKS) {
+                            continue;
+                        }
+                        stridedGroupedTasks = candidateTasks;
+                        stridedGroupedRows = true;
+                        break;
+                    }
+                }
+            }
+        }
+    }
     uint64_t desiredBlocks = 0;
-    if (reduceMode != 0U) {
+    if (stridedGroupedRows) {
+        desiredBlocks =
+            stridedGroupedTasks < MAX_BLOCK_DIM
+                ? stridedGroupedTasks
+                : MAX_BLOCK_DIM;
+    } else if (reduceMode != 0U) {
         desiredBlocks = MAX_BLOCK_DIM;
     } else if (groupedVector8) {
         const uint64_t vectorTasks =
@@ -443,9 +541,11 @@ static ge::graphStatus TilingFunc(gert::TilingContext* context)
     tiling.set_trailingReduceElements(
         trailingReduceElements);
     const uint64_t scheduledOutputs =
-        groupedVector8
-            ? outputElements / 8U
-            : outputElements;
+        stridedGroupedRows
+            ? stridedGroupedTasks
+            : (groupedVector8
+                ? outputElements / 8U
+                : outputElements);
     tiling.set_baseOutputsPerBlock(
         scheduledOutputs / blockDim);
     tiling.set_extraBlocks(static_cast<uint32_t>(
@@ -460,11 +560,13 @@ static ge::graphStatus TilingFunc(gert::TilingContext* context)
     tiling.set_reduceInputStrides(reduceInputStrides);
 
     context->SetTilingKey(
-        groupedVector8
-            ? 5U
-            : (useTreeFinalize
-                ? (longContiguous ? 4U : 3U)
-                : (longContiguous ? 2U : 1U)));
+        stridedGroupedRows
+            ? 7U
+            : (groupedVector8
+                ? 5U
+                : (useTreeFinalize
+                    ? (longContiguous ? 4U : 3U)
+                    : (longContiguous ? 2U : 1U))));
     context->SetBlockDim(blockDim);
     tiling.SaveToBuffer(
         context->GetRawTilingData()->GetData(),
