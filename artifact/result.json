@@ -1,5 +1,6 @@
 {
   "schema_version": 1,
+  "run_type": "s03o_final_gate_and_repository_sync",
   "operator": "SquareSumV1",
   "candidate": "S03O",
   "status": "internal_gate_pass_formal_platform_pending",
@@ -8,9 +9,13 @@
     "device": "Ascend 910B",
     "cann": "8.5.0"
   },
-  "git": {
+  "repository_sync": {
     "branch": "main",
-    "candidate_commit": "4b8657c"
+    "candidate_commit": "4b8657c",
+    "evidence_commit": "7a8e9d6",
+    "github_pushed": true,
+    "cloud_head_verified": "7a8e9d6",
+    "cloud_tracked_status_clean": true
   },
   "correctness": {
     "passed": 1325,

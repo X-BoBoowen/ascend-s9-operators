@@ -1,4 +1,4 @@
-[2026-08-07 19:38:37 +0800] Cloud main synchronized to 4b8657c.
+[2026-08-07 19:38:37 +0800] Cloud main synchronized to candidate commit 4b8657c.
 [2026-08-07 19:39:12 +0800] Fresh CANN 8.5.0 build started.
 [2026-08-07 19:39:46 +0800] Build and package creation passed; package SHA-256 4adeaeea2f5524685835079c6a17a541b7dda9da5339f405931e1ce77342b3f1.
 [2026-08-07 19:40:02 +0800] Package installed independently.
@@ -6,4 +6,6 @@
 [2026-08-07 19:49:50 +0800] FP16/BF16 target A/B/A passed: aggregate improvement 50.9727%, minimum point 50.5274%, maximum drift 0.2887%.
 [2026-08-07 19:53:27 +0800] Five focused fallback controls passed: maximum apparent regression 0.3094%.
 [2026-08-07 19:55:56 +0800] Submission ZIP audit passed: 9 entries, one top-level directory, source byte equality, run mode 0755.
-[2026-08-07 19:56:15 +0800] Latest internal run complete; formal platform submission is pending.
+[2026-08-07 20:01:40 +0800] Evidence and documentation pushed to GitHub main at 7a8e9d6.
+[2026-08-07 20:02:44 +0800] Cloud main verified at 7a8e9d6 with clean tracked status; pre-sync generated artifact preserved in stash and run archive.
+[2026-08-07 20:03:30 +0800] Latest consolidated result written atomically; formal platform submission remains pending.
