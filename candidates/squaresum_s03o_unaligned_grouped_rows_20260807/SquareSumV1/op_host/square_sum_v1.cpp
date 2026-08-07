@@ -428,7 +428,10 @@ static ge::graphStatus TilingFunc(gert::TilingContext* context)
         reduceInputStrides[reduceRank - 1U] == innerElements) {
         const uint64_t lastReduceDim =
             reduceDims[reduceRank - 1U];
+        const bool stridedGroupedNarrowType =
+            inputTypeBytes == sizeof(uint16_t);
         const bool stridedGroupedSmallInner =
+            stridedGroupedNarrowType &&
             innerElements % 8U != 0U &&
             innerElements <= 16U &&
             lastReduceDim > 1U &&

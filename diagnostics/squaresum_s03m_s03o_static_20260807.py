@@ -61,7 +61,14 @@ def route(
         and last_reduce_stride_matches
         and (allow_arbitrary or power_of_two)
         and (padded or inner % 8 == 0)
-        and (not padded or (power_of_two and inner <= 16))
+        and (
+            not padded
+            or (
+                power_of_two
+                and inner <= 16
+                and input_type_bytes == 2
+            )
+        )
     )
     if not base_ok:
         return RouteDecision(False, 0, 0, 0, aligned_inner)
@@ -242,6 +249,15 @@ def run_model_checks(stage):
             stage,
             RouteDecision(False, 0, 0, 0, 16),
             **common(
+                inner=15,
+                output_elements=3_840,
+                input_type_bytes=4,
+            ),
+        )
+        expect(
+            stage,
+            RouteDecision(False, 0, 0, 0, 16),
+            **common(
                 last_reduce=127,
                 reduce_elements=8_128,
                 inner=15,
@@ -279,6 +295,7 @@ def audit_source(stage, source):
         "s03o": (
             (host, "stridedGroupedPaddedRows"),
             (host, "stridedGroupedSmallInner"),
+            (host, "stridedGroupedNarrowType"),
             (kernel, "ProcessStridedGroupedPaddedRows"),
             (kernel, "ReduceUnalignedRowsInto"),
             (kernel, "TILING_KEY_IS(8)"),
