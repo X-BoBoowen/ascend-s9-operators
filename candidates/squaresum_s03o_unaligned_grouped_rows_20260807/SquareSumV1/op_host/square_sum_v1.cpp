@@ -502,7 +502,7 @@ static ge::graphStatus TilingFunc(gert::TilingContext* context)
                                 alignedInnerElements,
                                 alignedElementsPerTask) ||
                             alignedElementsPerTask >
-                                NORMAL_CHUNK_ELEMENTS) {
+                                TILE_OUTPUT_ELEMENTS) {
                             continue;
                         }
                         tasksPerOuter =

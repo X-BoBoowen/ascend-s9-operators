@@ -960,7 +960,7 @@ private:
                 static_cast<uint64_t>(width) * inner <=
                         TILE_OUTPUTS &&
                 static_cast<uint64_t>(width) *
-                        alignedInner <= CHUNK &&
+                        alignedInner <= TILE_OUTPUTS &&
                 blockCount <= 65535U &&
                 candidateTasks >= MIN_TASKS) {
                 groupedWidth = width;
@@ -1013,10 +1013,14 @@ private:
                 activeRows * rowStorageElements;
             const uint32_t outputCount =
                 activeRows * inner;
+            const uint32_t accumulateCount =
+                PADDED_ROWS
+                    ? activeRows * alignedInner
+                    : outputCount;
             AscendC::Duplicate(
                 accumulateLocal,
                 0.0f,
-                outputCount);
+                accumulateCount);
 
             for (uint64_t group = 0U;
                  group < outerReduceGroups;
@@ -1063,7 +1067,11 @@ private:
                                 row * rowStorageElements];
                         ReduceArbitraryRowsInto(
                             rowValues,
-                            accumulateLocal[row * inner],
+                            accumulateLocal[
+                                row *
+                                (PADDED_ROWS
+                                    ? alignedInner
+                                    : inner)],
                             lastReduceDim,
                             PADDED_ROWS ? alignedInner : inner,
                             inner);
@@ -1088,7 +1096,11 @@ private:
                                 row * rowStorageElements];
                         ReduceArbitraryRowsInto(
                             rowValues,
-                            accumulateLocal[row * inner],
+                            accumulateLocal[
+                                row *
+                                (PADDED_ROWS
+                                    ? alignedInner
+                                    : inner)],
                             lastReduceDim,
                             PADDED_ROWS ? alignedInner : inner,
                             inner);
@@ -1122,7 +1134,11 @@ private:
                                 row * rowStorageElements];
                         ReduceArbitraryRowsInto(
                             rowValues,
-                            accumulateLocal[row * inner],
+                            accumulateLocal[
+                                row *
+                                (PADDED_ROWS
+                                    ? alignedInner
+                                    : inner)],
                             lastReduceDim,
                             PADDED_ROWS ? alignedInner : inner,
                             inner);
@@ -1136,34 +1152,70 @@ private:
                     vToMte2Event_);
             }
 
-            if constexpr (
-                std::is_same<T, float>::value) {
-                AscendC::Adds(
-                    outputLocal,
-                    accumulateLocal,
-                    0.0f,
-                    outputCount);
-            } else if constexpr (
-                std::is_same<T, half>::value) {
-                AscendC::Cast(
-                    outputLocal,
-                    accumulateLocal,
-                    AscendC::RoundMode::CAST_NONE,
-                    outputCount);
+            if constexpr (PADDED_ROWS) {
+                for (uint32_t row = 0U;
+                     row < activeRows;
+                     ++row) {
+                    AscendC::LocalTensor<T> outputRow =
+                        outputLocal[row * alignedInner];
+                    AscendC::LocalTensor<float> accumulateRow =
+                        accumulateLocal[row * alignedInner];
+                    if constexpr (
+                        std::is_same<T, float>::value) {
+                        AscendC::Adds(
+                            outputRow,
+                            accumulateRow,
+                            0.0f,
+                            alignedInner);
+                    } else if constexpr (
+                        std::is_same<T, half>::value) {
+                        AscendC::Cast(
+                            outputRow,
+                            accumulateRow,
+                            AscendC::RoundMode::CAST_NONE,
+                            alignedInner);
+                    } else {
+                        AscendC::Cast(
+                            outputRow,
+                            accumulateRow,
+                            AscendC::RoundMode::CAST_RINT,
+                            alignedInner);
+                    }
+                }
             } else {
-                AscendC::Cast(
-                    outputLocal,
-                    accumulateLocal,
-                    AscendC::RoundMode::CAST_RINT,
-                    outputCount);
+                if constexpr (
+                    std::is_same<T, float>::value) {
+                    AscendC::Adds(
+                        outputLocal,
+                        accumulateLocal,
+                        0.0f,
+                        outputCount);
+                } else if constexpr (
+                    std::is_same<T, half>::value) {
+                    AscendC::Cast(
+                        outputLocal,
+                        accumulateLocal,
+                        AscendC::RoundMode::CAST_NONE,
+                        outputCount);
+                } else {
+                    AscendC::Cast(
+                        outputLocal,
+                        accumulateLocal,
+                        AscendC::RoundMode::CAST_RINT,
+                        outputCount);
+                }
             }
             AscendC::SetFlag<AscendC::HardEvent::V_MTE3>(
                 vToMte3Event_);
             AscendC::WaitFlag<AscendC::HardEvent::V_MTE3>(
                 vToMte3Event_);
             AscendC::DataCopyExtParams outputCopy;
-            outputCopy.blockCount = 1U;
-            outputCopy.blockLen = outputCount * sizeof(T);
+            outputCopy.blockCount =
+                PADDED_ROWS
+                    ? static_cast<uint16_t>(activeRows)
+                    : 1U;
+            outputCopy.blockLen =
+                (PADDED_ROWS ? inner : outputCount) * sizeof(T);
             outputCopy.srcStride = 0U;
             outputCopy.dstStride = 0U;
             AscendC::DataCopyPad(

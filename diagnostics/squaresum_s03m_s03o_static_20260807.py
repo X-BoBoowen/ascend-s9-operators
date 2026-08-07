@@ -69,7 +69,7 @@ def route(
             grouped_dim >= width
             and buffer_elements <= 8192
             and width * inner <= 1024
-            and width * row_stride <= 8192
+            and width * row_stride <= 1024
             and tasks >= 32
             and block_count <= 65535
         ):
