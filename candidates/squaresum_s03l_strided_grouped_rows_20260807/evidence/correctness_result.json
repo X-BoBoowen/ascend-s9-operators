@@ -1,0 +1,20 @@
+{
+  "schema_version": 1,
+  "passed": true,
+  "candidate": "S03L",
+  "public_rank_range": [
+    1,
+    5
+  ],
+  "suites": {
+    "directed": 46,
+    "bf16_semantics": 4,
+    "random": 150,
+    "extended": 726,
+    "s03j_boundary": 135,
+    "s03k_boundary": 69,
+    "s03l_boundary": 105
+  },
+  "total": 1235,
+  "s03l_seed": 2026080705
+}

@@ -1,14 +1,50 @@
 {
   "schema_version": 1,
+  "operator": "SquareSumV1",
+  "candidate": "S03L",
   "passed": true,
-  "candidate": "S03K",
-  "suites": {
-    "directed": 46,
-    "bf16_semantics": 4,
-    "random": 150,
-    "extended": 726,
-    "s03j_boundary": 135,
-    "s03k_boundary": 69
+  "environment": {
+    "device": "Ascend 910B",
+    "cann": "8.5.0"
   },
-  "total": 1130
+  "target_aba": {
+    "points_passed": 15,
+    "points_total": 15,
+    "baseline": "S03K",
+    "baseline_total_us": 18763.6500285,
+    "candidate_total_us": 1950.220019,
+    "aggregate_improvement_percent": 89.6063931269,
+    "minimum_improvement_percent": 79.2199846417,
+    "maximum_baseline_drift_percent": 9.6075160178
+  },
+  "control_aba": {
+    "points_passed": 18,
+    "points_total": 18,
+    "maximum_regression_percent": 7.2829845739,
+    "maximum_baseline_drift_percent": 5.4653578779
+  },
+  "correctness": {
+    "passed": 1235,
+    "total": 1235,
+    "suites": {
+      "directed": 46,
+      "bf16_semantics": 4,
+      "random": 150,
+      "extended": 726,
+      "s03j_boundary": 135,
+      "s03k_boundary": 69,
+      "s03l_boundary": 105
+    }
+  },
+  "package": {
+    "entries": 9,
+    "top_directory": "SquareSumV1_zip",
+    "run_mode": "0755",
+    "zip_size_bytes": 494527,
+    "zip_sha256": "3a61968292fde3b3cc876b4dcac0e585a9bc039683ccd0767ff17522dd158d4f",
+    "run_sha256": "e46a29644b03c70f960533d2e1c2b2118e4e1f746e35fdebab48508d58dc2acd"
+  },
+  "formal_platform_result": null,
+  "report": "SQUARESUM_S03L_CLOUD_GATE_20260807.md",
+  "log": "artifact/run.log"
 }

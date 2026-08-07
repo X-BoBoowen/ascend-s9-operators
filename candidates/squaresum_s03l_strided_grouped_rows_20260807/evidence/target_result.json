@@ -1,0 +1,131 @@
+{
+  "passed": true,
+  "points": 15,
+  "baseline_total_us": 18763.6500285,
+  "candidate_total_us": 1950.2200190000003,
+  "aggregate_improvement_percent": 89.6063931269352,
+  "minimum_improvement_percent": 79.21998464170787,
+  "maximum_baseline_drift_percent": 9.607516017798403,
+  "detail": [
+    {
+      "case": "target_rank5_inner8",
+      "dtype": "bf16",
+      "baseline_us": 1535.6750485,
+      "candidate_us": 91.300003,
+      "improvement_percent": 94.0547316250805,
+      "baseline_drift_percent": 8.860599326199186
+    },
+    {
+      "case": "target_rank5_inner8",
+      "dtype": "fp16",
+      "baseline_us": 1502.989948,
+      "candidate_us": 80.190003,
+      "improvement_percent": 94.66463477638641,
+      "baseline_drift_percent": 9.607516017798403
+    },
+    {
+      "case": "target_rank5_inner8",
+      "dtype": "fp32",
+      "baseline_us": 936.920017,
+      "candidate_us": 83.939999,
+      "improvement_percent": 91.04085754632777,
+      "baseline_drift_percent": 2.757971174822275
+    },
+    {
+      "case": "target_rank5_irregular_output",
+      "dtype": "bf16",
+      "baseline_us": 1186.9800089999999,
+      "candidate_us": 144.580007,
+      "improvement_percent": 87.81950783469344,
+      "baseline_drift_percent": 0.7548575318929225
+    },
+    {
+      "case": "target_rank5_irregular_output",
+      "dtype": "fp16",
+      "baseline_us": 1173.5749839999999,
+      "candidate_us": 124.090001,
+      "improvement_percent": 89.42632531437803,
+      "baseline_drift_percent": 0.9057803842894331
+    },
+    {
+      "case": "target_rank5_irregular_output",
+      "dtype": "fp32",
+      "baseline_us": 695.8500145,
+      "candidate_us": 123.989999,
+      "improvement_percent": 82.18150514962733,
+      "baseline_drift_percent": 0.15233297088620276
+    },
+    {
+      "case": "target_rank5_outer16",
+      "dtype": "bf16",
+      "baseline_us": 1074.175,
+      "candidate_us": 119.070001,
+      "improvement_percent": 88.91521390834826,
+      "baseline_drift_percent": 0.34911313333488586
+    },
+    {
+      "case": "target_rank5_outer16",
+      "dtype": "fp16",
+      "baseline_us": 1048.2450125,
+      "candidate_us": 100.840002,
+      "improvement_percent": 90.38011144364972,
+      "baseline_drift_percent": 0.7317034575444589
+    },
+    {
+      "case": "target_rank5_outer16",
+      "dtype": "fp32",
+      "baseline_us": 692.9500105,
+      "candidate_us": 99.830002,
+      "improvement_percent": 85.59347709252975,
+      "baseline_drift_percent": 0.20492401738696847
+    },
+    {
+      "case": "target_rank5_width4",
+      "dtype": "bf16",
+      "baseline_us": 2100.9700295000002,
+      "candidate_us": 204.830006,
+      "improvement_percent": 90.2506935784921,
+      "baseline_drift_percent": 0.48835085012809976
+    },
+    {
+      "case": "target_rank5_width4",
+      "dtype": "fp16",
+      "baseline_us": 2066.5199755000003,
+      "candidate_us": 169.369996,
+      "improvement_percent": 91.80409587093295,
+      "baseline_drift_percent": 1.393647839916552
+    },
+    {
+      "case": "target_rank5_width4",
+      "dtype": "fp32",
+      "baseline_us": 1062.415004,
+      "candidate_us": 220.770001,
+      "improvement_percent": 79.21998464170787,
+      "baseline_drift_percent": 0.09317583018622343
+    },
+    {
+      "case": "target_rank5_width8",
+      "dtype": "bf16",
+      "baseline_us": 1468.840003,
+      "candidate_us": 139.200002,
+      "improvement_percent": 90.52313378477615,
+      "baseline_drift_percent": 2.009751500483891
+    },
+    {
+      "case": "target_rank5_width8",
+      "dtype": "fp16",
+      "baseline_us": 1453.209996,
+      "candidate_us": 123.889998,
+      "improvement_percent": 91.47473535545375,
+      "baseline_drift_percent": 1.8896166469804558
+    },
+    {
+      "case": "target_rank5_width8",
+      "dtype": "fp32",
+      "baseline_us": 764.3349765,
+      "candidate_us": 124.329999,
+      "improvement_percent": 83.73357195174752,
+      "baseline_drift_percent": 0.5848209407436492
+    }
+  ]
+}

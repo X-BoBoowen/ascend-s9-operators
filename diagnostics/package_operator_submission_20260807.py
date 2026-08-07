@@ -2,6 +2,7 @@ import argparse
 import os
 from datetime import datetime
 from pathlib import Path
+from typing import Optional
 from zipfile import ZIP_DEFLATED, ZipFile, ZipInfo
 
 
@@ -14,7 +15,7 @@ SOURCE_FILES = (
 )
 
 
-def zip_info(name: str, source: Path | None, mode: int) -> ZipInfo:
+def zip_info(name: str, source: Optional[Path], mode: int) -> ZipInfo:
     if source is None:
         timestamp = datetime.now()
     else:
