@@ -61,6 +61,7 @@ def route(
         and last_reduce_stride_matches
         and (allow_arbitrary or power_of_two)
         and (padded or inner % 8 == 0)
+        and (not padded or (power_of_two and inner <= 16))
     )
     if not base_ok:
         return RouteDecision(False, 0, 0, 0, aligned_inner)
@@ -207,7 +208,7 @@ def run_model_checks(stage):
         )
         expect(
             stage,
-            RouteDecision(True, 8, 4, 64, 24),
+            RouteDecision(False, 0, 0, 0, 24),
             **common(
                 inner=17,
                 output_elements=4_352,
@@ -216,7 +217,7 @@ def run_model_checks(stage):
         )
         expect(
             stage,
-            RouteDecision(True, 8, 4, 64, 208),
+            RouteDecision(False, 0, 0, 0, 208),
             **common(
                 input_elements=117_374_976,
                 output_elements=50_944,
@@ -231,6 +232,21 @@ def run_model_checks(stage):
             stage,
             RouteDecision(True, 7, 4, 64, 16),
             **common(),
+        )
+        expect(
+            stage,
+            RouteDecision(True, 8, 8, 32, 16),
+            **common(inner=7, output_elements=1_792),
+        )
+        expect(
+            stage,
+            RouteDecision(False, 0, 0, 0, 16),
+            **common(
+                last_reduce=127,
+                reduce_elements=8_128,
+                inner=15,
+                output_elements=3_840,
+            ),
         )
     else:
         raise AssertionError(f"unknown stage: {stage}")
@@ -262,6 +278,7 @@ def audit_source(stage, source):
         ),
         "s03o": (
             (host, "stridedGroupedPaddedRows"),
+            (host, "stridedGroupedSmallInner"),
             (kernel, "ProcessStridedGroupedPaddedRows"),
             (kernel, "ReduceUnalignedRowsInto"),
             (kernel, "TILING_KEY_IS(8)"),

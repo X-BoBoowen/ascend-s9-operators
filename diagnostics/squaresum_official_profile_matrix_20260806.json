@@ -461,7 +461,7 @@
       "shape": [8, 64, 32, 127, 15],
       "axes": [1, 3],
       "keep_dims": false,
-      "tier": "s03o_target"
+      "tier": "s03o_control"
     },
     {
       "name": "s03o_target_reduce128_inner17",
@@ -469,7 +469,7 @@
       "shape": [8, 64, 32, 128, 17],
       "axes": [1, 3],
       "keep_dims": false,
-      "tier": "s03o_target"
+      "tier": "s03o_control"
     },
     {
       "name": "s03o_target_reduce128_inner31",
@@ -477,7 +477,7 @@
       "shape": [8, 32, 32, 128, 31],
       "axes": [1, 3],
       "keep_dims": false,
-      "tier": "s03o_target"
+      "tier": "s03o_control"
     },
     {
       "name": "s03o_target_reduce128_inner63",
@@ -485,7 +485,7 @@
       "shape": [8, 16, 32, 128, 63],
       "axes": [1, 3],
       "keep_dims": false,
-      "tier": "s03o_target"
+      "tier": "s03o_control"
     },
     {
       "name": "s03o_control_s03n_reduce127_inner16",
