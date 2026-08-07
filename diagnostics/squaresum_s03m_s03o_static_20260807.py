@@ -43,7 +43,11 @@ def route(
     )
     allow_arbitrary = stage in {"s03n", "s03o"}
     padded = stage == "s03o" and inner % 8 != 0
-    row_stride = aligned_inner if padded else inner
+    physical_row = last_reduce * inner
+    aligned_physical_row = (
+        (physical_row + elements_per_block - 1) // elements_per_block
+        * elements_per_block
+    )
     base_ok = (
         stage in {"s03m", "s03n", "s03o"}
         and fast_path == 4
@@ -63,13 +67,16 @@ def route(
 
     for width in (8, 4, 2):
         tasks = outer_rows * ((grouped_dim + width - 1) // width)
-        block_count = width * last_reduce
-        buffer_elements = block_count * row_stride
+        block_count = width if padded else width * last_reduce
+        buffer_elements = width * (
+            aligned_physical_row if padded else physical_row
+        )
+        buffer_limit = 16384 if padded else 8192
         if (
             grouped_dim >= width
-            and buffer_elements <= 8192
+            and buffer_elements <= buffer_limit
             and width * inner <= 1024
-            and width * row_stride <= 1024
+            and width * aligned_inner <= 1024
             and tasks >= 32
             and block_count <= 65535
         ):
@@ -195,12 +202,12 @@ def run_model_checks(stage):
     elif stage == "s03o":
         expect(
             stage,
-            RouteDecision(True, 8, 4, 64, 16),
+            RouteDecision(True, 8, 8, 32, 16),
             **common(inner=15, output_elements=3_840),
         )
         expect(
             stage,
-            RouteDecision(True, 8, 2, 128, 24),
+            RouteDecision(True, 8, 4, 64, 24),
             **common(
                 inner=17,
                 output_elements=4_352,
@@ -256,6 +263,7 @@ def audit_source(stage, source):
         "s03o": (
             (host, "stridedGroupedPaddedRows"),
             (kernel, "ProcessStridedGroupedPaddedRows"),
+            (kernel, "ReduceUnalignedRowsInto"),
             (kernel, "TILING_KEY_IS(8)"),
             (cmake, "--tiling_key=1,2,3,4,5,7,8"),
         ),

@@ -401,6 +401,7 @@ static ge::graphStatus TilingFunc(gert::TilingContext* context)
     constexpr uint64_t STRIDED_GROUPED_MIN_TASKS = 32U;
     constexpr uint64_t STRIDED_GROUPED_MAX_WIDTH = 8U;
     constexpr uint64_t NORMAL_CHUNK_ELEMENTS = 8192U;
+    constexpr uint64_t LONG_CHUNK_ELEMENTS = 16384U;
     constexpr uint64_t TILE_OUTPUT_ELEMENTS = 1024U;
     uint64_t stridedGroupedTasks = 0U;
     bool stridedGroupedRows = false;
@@ -428,17 +429,22 @@ static ge::graphStatus TilingFunc(gert::TilingContext* context)
         const uint64_t lastReduceDim =
             reduceDims[reduceRank - 1U];
         uint64_t rowElements = 0U;
-        uint64_t paddedRowElements = 0U;
+        uint64_t rowWithPadding = 0U;
+        uint64_t alignedRowElements = 0U;
         if (lastReduceDim > 1U &&
             reduceElements % lastReduceDim == 0U &&
             SafeMultiply(
                 lastReduceDim,
                 innerElements,
                 rowElements) &&
+            SafeAdd(
+                rowElements,
+                elementsPerBlock - 1U,
+                rowWithPadding) &&
             SafeMultiply(
-                lastReduceDim,
-                alignedInnerElements,
-                paddedRowElements)) {
+                rowWithPadding / elementsPerBlock,
+                elementsPerBlock,
+                alignedRowElements)) {
             uint32_t groupedOutputAxis = outputRank;
             for (int32_t axis =
                      static_cast<int32_t>(outputRank) - 1;
@@ -471,8 +477,12 @@ static ge::graphStatus TilingFunc(gert::TilingContext* context)
                             innerElements % 8U != 0U;
                         const uint64_t rowStorageElements =
                             paddedRows
-                                ? paddedRowElements
+                                ? alignedRowElements
                                 : rowElements;
+                        const uint64_t bufferLimit =
+                            paddedRows
+                                ? LONG_CHUNK_ELEMENTS
+                                : NORMAL_CHUNK_ELEMENTS;
                         uint64_t blockCount = 0U;
                         uint64_t bufferElements = 0U;
                         uint64_t outputElementsPerTask = 0U;
@@ -482,7 +492,7 @@ static ge::graphStatus TilingFunc(gert::TilingContext* context)
                         if (groupedOutputDim < width ||
                             !SafeMultiply(
                                 width,
-                                lastReduceDim,
+                                paddedRows ? 1U : lastReduceDim,
                                 blockCount) ||
                             blockCount >
                                 std::numeric_limits<uint16_t>::max() ||
@@ -490,7 +500,7 @@ static ge::graphStatus TilingFunc(gert::TilingContext* context)
                                 width,
                                 rowStorageElements,
                                 bufferElements) ||
-                            bufferElements > NORMAL_CHUNK_ELEMENTS ||
+                            bufferElements > bufferLimit ||
                             !SafeMultiply(
                                 width,
                                 innerElements,

@@ -921,9 +921,11 @@ private:
             elementsPerBlock * elementsPerBlock;
         const uint32_t rowElements =
             lastReduceDim * inner;
+        const uint32_t alignedRowElements =
+            (rowElements + elementsPerBlock - 1U) /
+            elementsPerBlock * elementsPerBlock;
         const uint32_t rowStorageElements =
-            lastReduceDim *
-            (PADDED_ROWS ? alignedInner : inner);
+            PADDED_ROWS ? alignedRowElements : rowElements;
         uint32_t groupedOutputAxis = outputRank_;
         for (int32_t axis =
                  static_cast<int32_t>(outputRank_) - 1;
@@ -953,7 +955,7 @@ private:
                 outerOutputRows * candidateTasksPerOuter;
             const uint64_t blockCount =
                 static_cast<uint64_t>(width) *
-                lastReduceDim;
+                (PADDED_ROWS ? 1U : lastReduceDim);
             if (groupedOutputDim >= width &&
                 static_cast<uint64_t>(width) *
                         rowStorageElements <= CHUNK &&
@@ -982,7 +984,8 @@ private:
         padParams.leftPadding = 0U;
         padParams.rightPadding =
             PADDED_ROWS
-                ? static_cast<uint8_t>(alignedInner - inner)
+                ? static_cast<uint8_t>(
+                    alignedRowElements - rowElements)
                 : 0U;
         const T zero = {};
         padParams.paddingValue = zero;
@@ -1031,10 +1034,9 @@ private:
                         group * lastReduceDim);
                 if constexpr (PADDED_ROWS) {
                     copyParams.blockCount =
-                        static_cast<uint16_t>(
-                            activeRows * lastReduceDim);
+                        static_cast<uint16_t>(activeRows);
                     copyParams.blockLen =
-                        inner * sizeof(T);
+                        rowElements * sizeof(T);
                 } else {
                     copyParams.blockCount = 1U;
                     copyParams.blockLen =
@@ -1065,7 +1067,7 @@ private:
                         AscendC::LocalTensor<float> rowValues =
                             inputLocal[
                                 row * rowStorageElements];
-                        ReduceArbitraryRowsInto(
+                        ReduceGroupedRowsInto<PADDED_ROWS>(
                             rowValues,
                             accumulateLocal[
                                 row *
@@ -1073,7 +1075,7 @@ private:
                                     ? alignedInner
                                     : inner)],
                             lastReduceDim,
-                            PADDED_ROWS ? alignedInner : inner,
+                            inner,
                             inner);
                     }
                 } else if constexpr (
@@ -1094,7 +1096,7 @@ private:
                         AscendC::LocalTensor<float> rowValues =
                             valueLocal[
                                 row * rowStorageElements];
-                        ReduceArbitraryRowsInto(
+                        ReduceGroupedRowsInto<PADDED_ROWS>(
                             rowValues,
                             accumulateLocal[
                                 row *
@@ -1102,7 +1104,7 @@ private:
                                     ? alignedInner
                                     : inner)],
                             lastReduceDim,
-                            PADDED_ROWS ? alignedInner : inner,
+                            inner,
                             inner);
                     }
                 } else {
@@ -1132,7 +1134,7 @@ private:
                         AscendC::LocalTensor<float> rowValues =
                             valueLocal[
                                 row * rowStorageElements];
-                        ReduceArbitraryRowsInto(
+                        ReduceGroupedRowsInto<PADDED_ROWS>(
                             rowValues,
                             accumulateLocal[
                                 row *
@@ -1140,7 +1142,7 @@ private:
                                     ? alignedInner
                                     : inner)],
                             lastReduceDim,
-                            PADDED_ROWS ? alignedInner : inner,
+                            inner,
                             inner);
                     }
                 }
@@ -1156,30 +1158,14 @@ private:
                 for (uint32_t row = 0U;
                      row < activeRows;
                      ++row) {
-                    AscendC::LocalTensor<T> outputRow =
-                        outputLocal[row * alignedInner];
-                    AscendC::LocalTensor<float> accumulateRow =
-                        accumulateLocal[row * alignedInner];
-                    if constexpr (
-                        std::is_same<T, float>::value) {
-                        AscendC::Adds(
-                            outputRow,
-                            accumulateRow,
-                            0.0f,
-                            alignedInner);
-                    } else if constexpr (
-                        std::is_same<T, half>::value) {
-                        AscendC::Cast(
-                            outputRow,
-                            accumulateRow,
-                            AscendC::RoundMode::CAST_NONE,
-                            alignedInner);
-                    } else {
-                        AscendC::Cast(
-                            outputRow,
-                            accumulateRow,
-                            AscendC::RoundMode::CAST_RINT,
-                            alignedInner);
+                    for (uint32_t column = 0U;
+                         column < inner;
+                         ++column) {
+                        outputLocal.SetValue(
+                            row * alignedInner + column,
+                            OutputFromFloat<T>(
+                                accumulateLocal.GetValue(
+                                    row * alignedInner + column)));
                     }
                 }
             } else {
@@ -1205,10 +1191,21 @@ private:
                         outputCount);
                 }
             }
-            AscendC::SetFlag<AscendC::HardEvent::V_MTE3>(
-                vToMte3Event_);
-            AscendC::WaitFlag<AscendC::HardEvent::V_MTE3>(
-                vToMte3Event_);
+            if constexpr (PADDED_ROWS) {
+                AscendC::SetFlag<
+                    AscendC::HardEvent::S_MTE3>(
+                    sToMte3Event_);
+                AscendC::WaitFlag<
+                    AscendC::HardEvent::S_MTE3>(
+                    sToMte3Event_);
+            } else {
+                AscendC::SetFlag<
+                    AscendC::HardEvent::V_MTE3>(
+                    vToMte3Event_);
+                AscendC::WaitFlag<
+                    AscendC::HardEvent::V_MTE3>(
+                    vToMte3Event_);
+            }
             AscendC::DataCopyExtParams outputCopy;
             outputCopy.blockCount =
                 PADDED_ROWS
@@ -1222,10 +1219,21 @@ private:
                 outputGm_[outputStart],
                 outputLocal,
                 outputCopy);
-            AscendC::SetFlag<AscendC::HardEvent::MTE3_V>(
-                mte3ToVEvent_);
-            AscendC::WaitFlag<AscendC::HardEvent::MTE3_V>(
-                mte3ToVEvent_);
+            if constexpr (PADDED_ROWS) {
+                AscendC::SetFlag<
+                    AscendC::HardEvent::MTE3_S>(
+                    mte3ToSEvent_);
+                AscendC::WaitFlag<
+                    AscendC::HardEvent::MTE3_S>(
+                    mte3ToSEvent_);
+            } else {
+                AscendC::SetFlag<
+                    AscendC::HardEvent::MTE3_V>(
+                    mte3ToVEvent_);
+                AscendC::WaitFlag<
+                    AscendC::HardEvent::MTE3_V>(
+                    mte3ToVEvent_);
+            }
         }
     }
 
@@ -2257,6 +2265,83 @@ private:
         }
     }
 
+    __aicore__ inline void ReduceUnalignedRowsInto(
+        AscendC::LocalTensor<float> values,
+        AscendC::LocalTensor<float> accumulate,
+        const uint32_t rows,
+        const uint32_t rowStride,
+        const uint32_t valueCount)
+    {
+        uint32_t consumedRows = 0U;
+        uint32_t remainingRows = rows;
+        while (remainingRows > 0U) {
+            const uint32_t chunkRows =
+                HighestPowerOfTwo(remainingRows);
+            AscendC::LocalTensor<float> chunkValues =
+                values[consumedRows * rowStride];
+            uint32_t activeRows = chunkRows;
+            if (((consumedRows * rowStride) & 7U) == 0U) {
+                while (activeRows > 1U) {
+                    const uint32_t halfRows = activeRows >> 1U;
+                    const uint32_t reductionElements =
+                        halfRows * rowStride;
+                    if ((reductionElements & 7U) != 0U) {
+                        break;
+                    }
+                    AscendC::Add(
+                        chunkValues,
+                        chunkValues,
+                        chunkValues[reductionElements],
+                        reductionElements);
+                    activeRows = halfRows;
+                }
+            }
+            AscendC::SetFlag<AscendC::HardEvent::V_S>(
+                vToSEvent_);
+            AscendC::WaitFlag<AscendC::HardEvent::V_S>(
+                vToSEvent_);
+            for (uint32_t column = 0U;
+                 column < valueCount;
+                 ++column) {
+                float total = accumulate.GetValue(column);
+                for (uint32_t row = 0U;
+                     row < activeRows;
+                     ++row) {
+                    total += chunkValues.GetValue(
+                        row * rowStride + column);
+                }
+                accumulate.SetValue(column, total);
+            }
+            consumedRows += chunkRows;
+            remainingRows -= chunkRows;
+        }
+    }
+
+    template <bool UNALIGNED_ROWS>
+    __aicore__ inline void ReduceGroupedRowsInto(
+        AscendC::LocalTensor<float> values,
+        AscendC::LocalTensor<float> accumulate,
+        const uint32_t rows,
+        const uint32_t rowStride,
+        const uint32_t valueCount)
+    {
+        if constexpr (UNALIGNED_ROWS) {
+            ReduceUnalignedRowsInto(
+                values,
+                accumulate,
+                rows,
+                rowStride,
+                valueCount);
+        } else {
+            ReduceArbitraryRowsInto(
+                values,
+                accumulate,
+                rows,
+                rowStride,
+                valueCount);
+        }
+    }
+
     __aicore__ inline void ReduceRowsInto(
         AscendC::LocalTensor<float> values,
         AscendC::LocalTensor<float> accumulate,
@@ -2955,7 +3040,7 @@ extern "C" __global__ __aicore__ void square_sum_v1(
         }
         KernelSquareSumV1<
             DTYPE_INPUT,
-            NORMAL_CHUNK,
+            LONG_CHUNK,
             false,
             false,
             false,
