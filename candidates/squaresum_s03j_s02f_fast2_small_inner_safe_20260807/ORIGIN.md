@@ -6,4 +6,5 @@
 - Cloud result: 1061/1061 correctness; six target A/B/A points aggregate
   improvement 34.1427%; unmodified controls worst regression 2.3903%.
 - Package: `提交相关材料/20260807/S03J/SquareSumV1.zip`.
-- Decision: packaged for official evaluation; no official score yet.
+- Official result: 5/5 Pass, `3259.544 us`; 35.549 us slower than S02F.
+- Decision: rejected as the active baseline; retained for S03K provenance.

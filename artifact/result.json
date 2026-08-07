@@ -1,8 +1,14 @@
 {
   "schema_version": 1,
   "passed": true,
-  "candidate": "S03J",
-  "suite": "fastPath2_boundary_correctness",
-  "total": 135,
-  "seed": 2026080703
+  "candidate": "S03K",
+  "suites": {
+    "directed": 46,
+    "bf16_semantics": 4,
+    "random": 150,
+    "extended": 726,
+    "s03j_boundary": 135,
+    "s03k_boundary": 69
+  },
+  "total": 1130
 }

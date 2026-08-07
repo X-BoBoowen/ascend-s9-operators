@@ -1,0 +1,91 @@
+{
+  "schema_version": 1,
+  "dimension_limits_from_spec": {
+    "N": 10000,
+    "N2": 10000,
+    "N3": 1000,
+    "N4": 200
+  },
+  "cases": [
+    {
+      "name": "target_inner2",
+      "route": "fast2",
+      "shape": [64, 8192, 2],
+      "axes": [1],
+      "keep_dims": false,
+      "tier": "s03k_target"
+    },
+    {
+      "name": "target_inner4",
+      "route": "fast2",
+      "shape": [64, 8192, 4],
+      "axes": [1],
+      "keep_dims": true,
+      "tier": "s03k_target"
+    },
+    {
+      "name": "target_inner8",
+      "route": "fast2",
+      "shape": [64, 8192, 8],
+      "axes": [1],
+      "keep_dims": false,
+      "tier": "s03k_target"
+    },
+    {
+      "name": "target_reduce2048",
+      "route": "fast2",
+      "shape": [64, 2048, 8],
+      "axes": [1],
+      "keep_dims": false,
+      "tier": "s03k_target"
+    },
+    {
+      "name": "target_odd_reduce",
+      "route": "fast2",
+      "shape": [73, 4097, 8],
+      "axes": [-2],
+      "keep_dims": true,
+      "tier": "s03k_target"
+    },
+    {
+      "name": "control_inner9",
+      "route": "fast2",
+      "shape": [64, 8192, 9],
+      "axes": [1],
+      "keep_dims": false,
+      "tier": "s03k_control"
+    },
+    {
+      "name": "control_rows39",
+      "route": "fast2",
+      "shape": [39, 8192, 8],
+      "axes": [1],
+      "keep_dims": false,
+      "tier": "s03k_control"
+    },
+    {
+      "name": "control_reduce2047",
+      "route": "fast2",
+      "shape": [65, 2047, 8],
+      "axes": [1],
+      "keep_dims": false,
+      "tier": "s03k_control"
+    },
+    {
+      "name": "control_fast3",
+      "route": "fast3",
+      "shape": [64, 16, 64, 256],
+      "axes": [0, 3],
+      "keep_dims": false,
+      "tier": "s03k_control"
+    },
+    {
+      "name": "control_fast4",
+      "route": "fast4",
+      "shape": [128, 16, 64, 64],
+      "axes": [0, 2],
+      "keep_dims": false,
+      "tier": "s03k_control"
+    }
+  ]
+}
